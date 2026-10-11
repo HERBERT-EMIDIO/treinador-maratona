@@ -304,6 +304,7 @@ function renderAll() {
     renderWatch();
     renderMapTargets();
     renderMapStats();
+    if (mapState.map) renderStops();
 }
 
 function renderHeader() {
@@ -871,7 +872,13 @@ async function loadManual() {
 
 /* ---------- mapa ---------- */
 
-const mapState = { map: null, line: null, marks: null, start: null, segments: [], busy: false };
+const mapState = {
+    map: null, line: null, marks: null, segments: [], stops: [], busy: false,
+    mode: 'route', past: [], future: [], endTimer: null,
+};
+const HISTORY_MAX = 100;
+const SAME_PLACE_M = 30;
+const OFF_ROUTE_M = 100;
 
 function distanceMeters(a, b) {
     const rad = (x) => (x * Math.PI) / 180;
@@ -923,7 +930,11 @@ function initMap() {
     }).addTo(map);
     mapState.line = L.polyline([], { color: '#fc5200', weight: 5, opacity: .9 }).addTo(map);
     mapState.marks = L.layerGroup().addTo(map);
-    map.on('click', (e) => addPoint([e.latlng.lat, e.latlng.lng]));
+    map.on('click', (e) => {
+        const point = [e.latlng.lat, e.latlng.lng];
+        if (mapState.mode === 'stop') addStop(point);
+        else addPoint(point);
+    });
     mapState.map = map;
     renderSaved();
     renderMapTargets();
@@ -954,34 +965,273 @@ async function connect(from, to) {
     }
 }
 
+function placeField(which) {
+    return $(which === 'start' ? '#route-start' : '#route-end');
+}
+
+function setPlace(which, text, auto) {
+    const input = placeField(which);
+    input.value = text;
+    input.dataset.auto = auto ? '1' : '';
+}
+
+function snapshot() {
+    return JSON.stringify({
+        segments: mapState.segments,
+        stops: mapState.stops,
+        start: [placeField('start').value, placeField('start').dataset.auto],
+        end: [placeField('end').value, placeField('end').dataset.auto],
+    });
+}
+
+function restore(saved) {
+    const data = JSON.parse(saved);
+    mapState.segments = data.segments;
+    mapState.stops = data.stops;
+    setPlace('start', data.start[0], data.start[1]);
+    setPlace('end', data.end[0], data.end[1]);
+    redrawRoute();
+    const coords = routeCoords();
+    if (coords.length && !data.start[0]) fillPlace('start', coords[0]);
+    if (!data.end[0]) syncEndPlace();
+    mapState.stops.filter((s) => s.auto && !s.name).forEach((s) => fillStopName(s.id));
+}
+
+function commit() {
+    mapState.past.push(snapshot());
+    if (mapState.past.length > HISTORY_MAX) mapState.past.shift();
+    mapState.future = [];
+}
+
+function undoRoute() {
+    if (mapState.busy || !mapState.past.length) return;
+    mapState.future.push(snapshot());
+    restore(mapState.past.pop());
+}
+
+function redoRoute() {
+    if (mapState.busy || !mapState.future.length) return;
+    mapState.past.push(snapshot());
+    restore(mapState.future.pop());
+}
+
+async function placeName([lat, lng]) {
+    try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=17&lat=${lat}&lon=${lng}`;
+        const data = await (await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } })).json();
+        const a = data.address || {};
+        const street = a.road || a.pedestrian || a.footway || a.path || data.name;
+        const area = a.suburb || a.neighbourhood || a.city_district || a.city || a.town;
+        return [street, area].filter(Boolean).join(', ') || String(data.display_name || '').split(',').slice(0, 2).join(',');
+    } catch {
+        return '';
+    }
+}
+
+async function fillPlace(which, point) {
+    const input = placeField(which);
+    if (input.value && !input.dataset.auto) return;
+    const name = await placeName(point);
+    const coords = routeCoords();
+    const current = which === 'start' ? coords[0] : coords[coords.length - 1];
+    if (!name || !current || distanceMeters(current, point) > 1) return;
+    if (input.value && !input.dataset.auto) return;
+    setPlace(which, name, true);
+}
+
+function syncEndPlace() {
+    clearTimeout(mapState.endTimer);
+    const coords = routeCoords();
+    if (coords.length < 2) {
+        if (placeField('end').dataset.auto) setPlace('end', '', true);
+        return;
+    }
+    const last = coords[coords.length - 1];
+    if (distanceMeters(coords[0], last) < SAME_PLACE_M) {
+        if (!placeField('end').value || placeField('end').dataset.auto) setPlace('end', placeField('start').value, true);
+        return;
+    }
+    mapState.endTimer = setTimeout(() => fillPlace('end', last), 1200);
+}
+
 async function addPoint(point) {
     if (mapState.busy) return;
+    commit();
     if (!mapState.segments.length) {
         mapState.segments.push([point]);
+        fillPlace('start', point);
     } else {
         const coords = routeCoords();
         mapState.segments.push(await connect(coords[coords.length - 1], point));
     }
     redrawRoute();
+    syncEndPlace();
+}
+
+function projectOnRoute(point, coords = routeCoords()) {
+    let best = { meters: Infinity, km: 0 };
+    let walked = 0;
+    const cos = Math.cos((point[0] * Math.PI) / 180);
+    for (let i = 1; i < coords.length; i += 1) {
+        const a = coords[i - 1];
+        const b = coords[i];
+        const length = distanceMeters(a, b);
+        const dx = (b[1] - a[1]) * cos;
+        const dy = b[0] - a[0];
+        const span = dx * dx + dy * dy;
+        const t = span ? Math.min(1, Math.max(0, (((point[1] - a[1]) * cos) * dx + (point[0] - a[0]) * dy) / span)) : 0;
+        const foot = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        const meters = distanceMeters(point, foot);
+        if (meters < best.meters) best = { meters, km: (walked + length * t) / 1000, foot };
+        walked += length;
+    }
+    return best;
+}
+
+function orderedStops() {
+    const coords = routeCoords();
+    return mapState.stops
+        .map((stop) => ({ ...stop, ...projectOnRoute([stop.lat, stop.lng], coords) }))
+        .sort((a, b) => a.km - b.km);
+}
+
+async function fillStopName(id) {
+    const stop = mapState.stops.find((s) => s.id === id);
+    if (!stop || !stop.auto) return;
+    const name = await placeName([stop.lat, stop.lng]);
+    const current = mapState.stops.find((s) => s.id === id);
+    if (!name || !current || !current.auto) return;
+    current.name = name;
+    const input = $(`[data-stop-name="${id}"]`);
+    if (input && document.activeElement !== input) input.value = name;
+    drawMarks();
+}
+
+function onRoute(point) {
+    const near = projectOnRoute(point);
+    return near.meters <= OFF_ROUTE_M ? near.foot : point;
+}
+
+function addStop(point) {
+    if (routeCoords().length < 2) return toast('Trace o caminho antes de marcar paradas.');
+    commit();
+    const [lat, lng] = onRoute(point);
+    const stop = { id: Date.now(), lat, lng, name: '', auto: true };
+    mapState.stops.push(stop);
+    redrawRoute();
+    fillStopName(stop.id);
+}
+
+function removeStop(id) {
+    commit();
+    mapState.stops = mapState.stops.filter((s) => s.id !== id);
+    redrawRoute();
+}
+
+function pinIcon(label, kind) {
+    return L.divIcon({
+        className: 'pin-icon',
+        html: `<div class="pin ${kind}"><span>${esc(label)}</span></div>`,
+        iconSize: [30, 40],
+        iconAnchor: [15, 38],
+        tooltipAnchor: [0, -34],
+    });
+}
+
+function drawMarks() {
+    const coords = routeCoords();
+    mapState.marks.clearLayers();
+    kmMarks(coords).forEach((p, i) => {
+        L.marker(p, { icon: L.divIcon({ className: 'km-icon', html: String(i + 1), iconSize: [22, 22] }), interactive: false }).addTo(mapState.marks);
+    });
+    if (!coords.length) return;
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    const loop = coords.length > 1 && distanceMeters(first, last) < SAME_PLACE_M;
+    const startName = placeField('start').value;
+    if (coords.length > 1 && !loop) {
+        L.marker(last, { icon: pinIcon('F', 'end'), zIndexOffset: 900 })
+            .bindTooltip(`Chegada${placeField('end').value ? `: ${esc(placeField('end').value)}` : ''}`).addTo(mapState.marks);
+    }
+    L.marker(first, { icon: pinIcon(loop ? 'I·F' : 'I', 'start'), zIndexOffset: 1000 })
+        .bindTooltip(`${loop ? 'Início e chegada' : 'Início'}${startName ? `: ${esc(startName)}` : ''}`).addTo(mapState.marks);
+    orderedStops().forEach((stop, i) => {
+        const marker = L.marker([stop.lat, stop.lng], { icon: pinIcon(`P${i + 1}`, 'stop'), draggable: true, zIndexOffset: 800 })
+            .bindTooltip(`Parada ${i + 1}${stop.name ? `: ${esc(stop.name)}` : ''} · km ${esc(stop.km.toFixed(1).replace('.', ','))}`)
+            .addTo(mapState.marks);
+        marker.on('dragstart', commit);
+        marker.on('dragend', () => {
+            const moved = mapState.stops.find((s) => s.id === stop.id);
+            const { lat, lng } = marker.getLatLng();
+            const [onLat, onLng] = onRoute([lat, lng]);
+            Object.assign(moved, { lat: onLat, lng: onLng });
+            redrawRoute();
+            fillStopName(stop.id);
+        });
+    });
+}
+
+function renderStops() {
+    const list = orderedStops();
+    const pace = state.plan?.target.pace_seconds_per_km;
+    $('#stop-count').textContent = list.length;
+    $('#stop-list').innerHTML = list.length
+        ? list.map((stop, i) => {
+            const where = stop.meters > OFF_ROUTE_M
+                ? `<small class="off">Fora do percurso (${Math.round(stop.meters)} m). Arraste o alfinete para o caminho.</small>`
+                : `<small>km ${esc(stop.km.toFixed(1).replace('.', ','))}${pace ? ` · chega em ≈ ${esc(fmtDuration(stop.km * pace))} no pace` : ''}</small>`;
+            return `<li><span class="tag">P${i + 1}</span>
+                <input data-stop-name="${stop.id}" value="${esc(stop.name)}" placeholder="Nome da parada" maxlength="60">
+                <button type="button" data-stop-remove="${stop.id}" title="Excluir parada">×</button>${where}</li>`;
+        }).join('')
+        : '<li class="small muted" style="display:block">Nenhuma parada. Use "Marcar parada" e clique no caminho onde vai parar (água, banheiro, encontro).</li>';
+}
+
+function renderMapHint() {
+    const points = routeCoords().length;
+    let hint;
+    if (!points) hint = 'Passo 1: clique no mapa para fincar o alfinete de início, ou digite o local de início e aperte Enter.';
+    else if (points === 1) hint = 'Passo 2: clique nos pontos do caminho. Cada clique segue as ruas até lá. O último ponto é a chegada.';
+    else if (mapState.mode === 'stop') hint = 'Clique no caminho onde você vai parar. Arraste o alfinete azul para ajustar.';
+    else hint = 'Continue o caminho, marque paradas ou baixe o GPX. Errou? Desfazer (Ctrl+Z) e Refazer (Ctrl+Y).';
+    $('#map-hint').textContent = hint;
+}
+
+function setMapMode(mode) {
+    mapState.mode = mode;
+    $$('#map-mode button').forEach((b) => b.classList.toggle('active', b.dataset.mapMode === mode));
+    renderMapHint();
 }
 
 function redrawRoute() {
     if (!mapState.map) return;
-    const coords = routeCoords();
-    mapState.line.setLatLngs(coords);
-    mapState.marks.clearLayers();
-    if (coords.length) {
-        L.circleMarker(coords[0], { radius: 8, color: '#fff', weight: 3, fillColor: '#1d9a5b', fillOpacity: 1 })
-            .bindTooltip('Início').addTo(mapState.marks);
-    }
-    if (coords.length > 1) {
-        L.circleMarker(coords[coords.length - 1], { radius: 7, color: '#fff', weight: 3, fillColor: '#242428', fillOpacity: 1 })
-            .bindTooltip('Fim').addTo(mapState.marks);
-    }
-    kmMarks(coords).forEach((p, i) => {
-        L.marker(p, { icon: L.divIcon({ className: 'km-icon', html: String(i + 1), iconSize: [22, 22] }) }).addTo(mapState.marks);
-    });
+    mapState.line.setLatLngs(routeCoords());
+    drawMarks();
+    renderStops();
+    renderMapHint();
+    $('#map-undo').disabled = !mapState.past.length;
+    $('#map-redo').disabled = !mapState.future.length;
     renderMapStats();
+}
+
+async function placeFromField(which) {
+    const text = placeField(which).value.trim();
+    if (!text || mapState.busy) return;
+    const point = await geocode(text);
+    if (point === null) toast('Lugar não encontrado.');
+    if (!point) return;
+    const coords = routeCoords();
+    if (which === 'start') {
+        if (coords.length) return toast('O início já está marcado. Use Desfazer ou Limpar para trocar.');
+        setPlace('start', text, false);
+        mapState.map.setView(point, 16);
+        addPoint(point);
+        return;
+    }
+    if (!coords.length) return toast('Marque o início antes da chegada.');
+    setPlace('end', text, false);
+    await addPoint(point);
+    mapState.map.fitBounds(L.latLngBounds(routeCoords()), { padding: [30, 30] });
 }
 
 function renderMapTargets() {
@@ -1026,32 +1276,53 @@ function renderMapStats() {
         ${rows.length ? `<div class="km-list"><table><thead><tr><th>Marca</th><th>Acumulado</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>` : ''}`;
 }
 
-function undoPoint() {
-    mapState.segments.pop();
-    redrawRoute();
-}
-
 async function closeLoop() {
     const coords = routeCoords();
     if (coords.length < 2) return toast('Marque pelo menos dois pontos.');
+    if (mapState.busy) return;
+    commit();
     mapState.segments.push(await connect(coords[coords.length - 1], coords[0]));
     redrawRoute();
+    syncEndPlace();
 }
 
 function outAndBack() {
     const coords = routeCoords();
     if (coords.length < 2) return toast('Marque pelo menos dois pontos.');
+    if (mapState.busy) return;
+    commit();
     mapState.segments.push(coords.slice(0, -1).reverse());
     redrawRoute();
+    syncEndPlace();
 }
 
 function clearRoute() {
+    if (mapState.busy || (!mapState.segments.length && !mapState.stops.length)) return;
+    commit();
     mapState.segments = [];
+    mapState.stops = [];
+    setPlace('start', '', true);
+    setPlace('end', '', true);
     redrawRoute();
 }
 
 function routeName() {
-    return $('#route-name').value.trim() || 'Percurso';
+    const start = placeField('start').value.trim();
+    const end = placeField('end').value.trim();
+    const fallback = start && end && start !== end ? `${start} → ${end}` : start || 'Percurso';
+    return $('#route-name').value.trim() || fallback;
+}
+
+function gpxWaypoints(coords) {
+    const wpt = ([lat, lng], name, type) => `  <wpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}"><name>${esc(name)}</name><type>${type}</type></wpt>`;
+    const start = placeField('start').value.trim();
+    const end = placeField('end').value.trim();
+    const points = [wpt(coords[0], start ? `Início: ${start}` : 'Início', 'start')];
+    orderedStops().forEach((stop, i) => {
+        points.push(wpt([stop.lat, stop.lng], `P${i + 1}${stop.name ? `: ${stop.name}` : ''} (km ${stop.km.toFixed(1)})`, 'stop'));
+    });
+    points.push(wpt(coords[coords.length - 1], end ? `Chegada: ${end}` : 'Chegada', 'finish'));
+    return points.join('\n');
 }
 
 function exportGpx() {
@@ -1062,6 +1333,7 @@ function exportGpx() {
     const gpx = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="Treinador Maratona" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>${esc(name)}</name></metadata>
+${gpxWaypoints(coords)}
   <trk>
     <name>${esc(name)}</name>
     <type>running</type>
@@ -1084,7 +1356,15 @@ function saveRoute() {
     const coords = routeCoords();
     if (coords.length < 2) return toast('Desenhe o percurso antes de salvar.');
     const routes = savedRoutes().filter((r) => r.name !== routeName());
-    routes.unshift({ name: routeName(), km: routeMeters() / 1000, segments: mapState.segments, saved: new Date().toISOString() });
+    routes.unshift({
+        name: routeName(),
+        km: routeMeters() / 1000,
+        segments: mapState.segments,
+        stops: mapState.stops,
+        start: placeField('start').value.trim(),
+        end: placeField('end').value.trim(),
+        saved: new Date().toISOString(),
+    });
     store.set('tm_routes', routes.slice(0, 30));
     renderSaved();
     toast('Percurso salvo neste navegador.');
@@ -1100,10 +1380,16 @@ function renderSaved() {
 
 function loadRoute(index) {
     const route = savedRoutes()[index];
-    if (!route) return;
+    if (!route || mapState.busy) return;
+    commit();
     mapState.segments = route.segments;
+    mapState.stops = route.stops || [];
+    setPlace('start', route.start || '', !route.start);
+    setPlace('end', route.end || '', !route.end);
     $('#route-name').value = route.name;
     redrawRoute();
+    if (!route.start && route.segments.length) fillPlace('start', routeCoords()[0]);
+    syncEndPlace();
     const coords = routeCoords();
     if (coords.length) mapState.map.fitBounds(L.latLngBounds(coords), { padding: [30, 30] });
 }
@@ -1115,16 +1401,22 @@ function removeRoute(index) {
     renderSaved();
 }
 
-async function searchPlace(text) {
-    if (!text.trim() || !mapState.map) return;
+async function geocode(text) {
     try {
         const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(text)}`;
         const results = await (await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } })).json();
-        if (!results.length) return toast('Lugar não encontrado.');
-        mapState.map.setView([Number(results[0].lat), Number(results[0].lon)], 16);
+        return results.length ? [Number(results[0].lat), Number(results[0].lon)] : null;
     } catch {
         toast('Busca indisponível no momento.');
+        return undefined;
     }
+}
+
+async function searchPlace(text) {
+    if (!text.trim() || !mapState.map) return;
+    const point = await geocode(text);
+    if (point) mapState.map.setView(point, 16);
+    else if (point === null) toast('Lugar não encontrado.');
 }
 
 /* ---------- eventos ---------- */
@@ -1202,7 +1494,42 @@ function bindEvents() {
         updateSetting('distance', chip.dataset.distance);
     });
 
-    $('#map-undo').addEventListener('click', undoPoint);
+    $('#map-undo').addEventListener('click', undoRoute);
+    $('#map-redo').addEventListener('click', redoRoute);
+    $('#map-mode').addEventListener('click', (e) => {
+        const button = e.target.closest('[data-map-mode]');
+        if (button) setMapMode(button.dataset.mapMode);
+    });
+    ['start', 'end'].forEach((which) => {
+        const input = placeField(which);
+        input.addEventListener('input', () => { input.dataset.auto = ''; });
+        input.addEventListener('change', () => mapState.map && drawMarks());
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') placeFromField(which);
+        });
+    });
+    $('#stop-list').addEventListener('input', (e) => {
+        const stop = mapState.stops.find((s) => String(s.id) === e.target.dataset.stopName);
+        if (!stop) return;
+        Object.assign(stop, { name: e.target.value, auto: false });
+    });
+    $('#stop-list').addEventListener('change', () => drawMarks());
+    $('#stop-list').addEventListener('click', (e) => {
+        const button = e.target.closest('[data-stop-remove]');
+        if (button) removeStop(Number(button.dataset.stopRemove));
+    });
+    document.addEventListener('keydown', (e) => {
+        if (!$('#tab-mapa').classList.contains('active') || e.target.closest('input, textarea, select')) return;
+        const key = e.key.toLowerCase();
+        if (!(e.ctrlKey || e.metaKey)) return;
+        if (key === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            undoRoute();
+        } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+            e.preventDefault();
+            redoRoute();
+        }
+    });
     $('#map-loop').addEventListener('click', closeLoop);
     $('#map-back').addEventListener('click', outAndBack);
     $('#map-clear').addEventListener('click', clearRoute);

@@ -287,6 +287,46 @@ details.help ol { margin-top: 8px; }
     text-align: center;
     line-height: 18px;
 }
+.map-hint {
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    background: var(--brand-soft);
+    border-radius: 8px;
+    font-size: .88rem;
+    color: var(--brand-dark);
+}
+.map-mode { display: flex; margin-top: 4px; }
+.map-mode button { flex: 1; white-space: nowrap; font-size: .88rem; padding: 5px 8px; }
+.map-mode button[data-map-mode="stop"].active { color: #1f6fb2; }
+#map .leaflet-grab { cursor: crosshair; }
+#map .leaflet-dragging .leaflet-grab { cursor: grabbing; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+.dot.start { background: var(--ok); }
+.dot.end { background: var(--ink); }
+.dot.stop { background: #1f6fb2; }
+.pin-icon { background: none; border: 0; }
+.pin {
+    width: 30px;
+    height: 30px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: var(--ok);
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.pin span { transform: rotate(45deg); color: #fff; font-weight: 700; font-size: 11px; }
+.pin.end { background: var(--ink); }
+.pin.stop { background: #1f6fb2; }
+.stops { list-style: none; padding: 0; margin: 0 0 8px; }
+.stops li { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.stops .tag { background: #1f6fb2; color: #fff; border-radius: 999px; font-size: .72rem; font-weight: 700; padding: 1px 7px; }
+.stops input { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: .88rem; min-width: 0; }
+.stops small { grid-column: 2 / 4; color: var(--muted); }
+.stops small.off { color: #b42318; }
+.stops button { border: 0; background: none; color: var(--brand-dark); cursor: pointer; font-weight: 700; font-size: 1rem; }
 .saved { list-style: none; padding: 0; margin: 8px 0 0; }
 .saved li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .88rem; }
 .saved li button { border: 0; background: none; color: var(--brand-dark); cursor: pointer; font-weight: 600; }
