@@ -1,0 +1,14 @@
+---
+description: Contexto mínimo e mudanças locais no treinador de maratona
+alwaysApply: true
+---
+
+# Treinador Maratona
+
+Meta: 42,195 km a 06:40 min/km (cerca de 4:41), sem andar. Prova: Maurício de Nassau, Recife, 2026-11-01. Recorde anterior: 4:50. Relógio atual: Garmin Forerunner 165. Outro modelo ou outra meta entra por configuração, sem script novo.
+
+Arquivos: `PLANO_MARATONA_GARMIN.md` (manual), `garmin_marathon_planner.py` (cálculo), `treino_maratona_config.json` (saída do script), `Treinos/` (gerada por `--treinos`, não editar à mão).
+
+Web estática (localhost/treinador_maratona e GitHub Pages, sem servidor): `index.html` (casca das abas), `assets/app.js` e `assets/app.css`. O `app.js` carrega o próprio `garmin_marathon_planner.py` no navegador com Pyodide e chama `main(... --json-only --treinos)` num disco virtual; `.fit` e `.zip` da semana saem de lá. `treino_maratona_config.json` só pinta a primeira tela enquanto o Pyodide carrega. Por isso o script não pode depender de pacote fora da biblioteca padrão. Cálculo de pace, parciais e calendário fica só no Python; o JS calcula apenas distância e tempo do percurso desenhado no mapa (Leaflet + OSM). `.nojekyll` impede o GitHub Pages de converter o manual `.md`.
+
+Mudança pedida: editar só o trecho. Manter as seções A, B e C, a CLI e os dicionários `LINE_PROFILES` e `MODEL_OVERRIDES`. Fisiologia fica no manual. Python só com biblioteca padrão. Responder em português. Não reescrever arquivo inteiro, não trocar a arquitetura e não colar o manual de volta na conversa. Tempos e parciais saem rodando o script.

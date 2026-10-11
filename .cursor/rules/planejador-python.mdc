@@ -1,0 +1,17 @@
+---
+description: Convenções do planejador Garmin
+globs: garmin_marathon_planner.py
+alwaysApply: false
+---
+
+# Planejador
+
+- Biblioteca padrão. Distância e tempo com `Decimal`.
+- Novo relógio: entrada em `LINE_PROFILES` ou `MODEL_OVERRIDES`. Não criar outro script.
+- Padrões: Forerunner 165, 42.195 km, pace 06:40, data 2026-11-01, tolerância 10 s, parcial de 5 km.
+- CLI sobrescreve o JSON. Saída: `treino_maratona_config.json` ao lado do script, UTF-8.
+- Pace `MM:SS` por km. Console em vírgula decimal. JSON com número.
+- Auto Lap de prova permanece 1 km. A parcial de 5 km é a tabela de conferência.
+- `--fit` grava um treino avulso de ritmo. `--treinos` gera `Treinos/semana-N_.../D-dia/treino-corrida|treino-forca/AAAA-MM-DD_slug.fit` e o `README.md`. Mudar sessões em `RUN_SESSIONS`, `STRENGTH_SESSIONS` e `TRAINING_WEEKS`, não nos arquivos gerados.
+- FIT de treino com CRC próprio, sem SDK. Nome no relógio: `DDmes Titulo`, até 15 caracteres e único. Vai por USB para `GARMIN/NewFiles`. A tela Importar dados do Connect recusa treino.
+- Depois de mudar fórmula de split ou zona, rodar o script e conferir 42,195 km a 06:40 = 04:41:18.

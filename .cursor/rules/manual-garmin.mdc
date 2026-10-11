@@ -1,0 +1,13 @@
+---
+description: Como atualizar o manual da maratona sem reescrevê-lo
+globs: PLANO_MARATONA_GARMIN.md
+alwaysApply: false
+---
+
+# Manual
+
+- Manter as seções A (linhas Garmin), B (métricas e fisiologia) e C (força).
+- Corrigir a seção citada. Não reformatar o documento inteiro.
+- Forerunner 165: HRV Status, Body Battery, sono, VO2, recuperação, PacePro e cinco botões. Training Readiness, Training Status, mapa topográfico, ClimbPro e Stamina ficam para 265, 965 ou Fenix, conforme a seção A.
+- Venu 3: durante a atividade o Back marca a volta. A troca de tela é por toque.
+- Fisiologia e força ficam neste arquivo. O Python calcula pace, parciais e telas.

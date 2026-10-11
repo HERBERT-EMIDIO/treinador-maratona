@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Treinador Maratona</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="assets/app.css?v=2">
+</head>
+<body>
+<header class="topbar">
+    <div class="topbar-inner">
+        <div class="brand">
+            <strong>Treinador Maratona</strong>
+            <span id="brand-sub">Carregando plano…</span>
+        </div>
+        <span class="busy" id="busy">Calculando…</span>
+        <nav class="tabs" id="tabs">
+            <button data-tab="hoje" class="active">Hoje</button>
+            <button data-tab="semanas">Semanas</button>
+            <button data-tab="calculadora">Calculadora</button>
+            <button data-tab="mapa">Mapa</button>
+            <button data-tab="relogio">Relógio</button>
+            <button data-tab="manual">Manual</button>
+        </nav>
+    </div>
+</header>
+
+<main>
+    <div class="banner" id="banner" hidden></div>
+
+    <section class="tab active" id="tab-hoje">
+        <div class="stack">
+            <div class="card hero" id="hero"></div>
+            <div class="grid two">
+                <div class="card" id="today-card"></div>
+                <div class="card" id="week-card"></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="tab" id="tab-semanas">
+        <div class="chips" id="week-chips"></div>
+        <div class="card" id="files-card"></div>
+        <div class="days" id="days" style="margin-top:16px"></div>
+    </section>
+
+    <section class="tab" id="tab-calculadora">
+        <div class="grid two">
+            <form class="card form" id="calc-form" autocomplete="off">
+                <h2>Meta</h2>
+                <div class="field">
+                    <label for="f-model">Relógio</label>
+                    <input id="f-model" name="model" list="model-list">
+                    <datalist id="model-list"></datalist>
+                    <div class="hint">Modelos fora da lista usam o perfil da linha.</div>
+                </div>
+                <div class="field">
+                    <label>Distância</label>
+                    <div class="chips" id="distance-chips" style="margin-bottom:8px">
+                        <button type="button" class="chip" data-distance="5">5 km</button>
+                        <button type="button" class="chip" data-distance="10">10 km</button>
+                        <button type="button" class="chip" data-distance="21.0975">Meia</button>
+                        <button type="button" class="chip" data-distance="42.195">Maratona</button>
+                    </div>
+                    <input id="f-distance" name="distance" inputmode="decimal">
+                </div>
+                <div class="field">
+                    <label>Calcular a partir de</label>
+                    <div class="segmented" id="mode">
+                        <button type="button" data-mode="pace">Pace</button>
+                        <button type="button" data-mode="time">Tempo alvo</button>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field" id="pace-field">
+                        <label for="f-pace">Pace (min/km)</label>
+                        <input id="f-pace" name="pace" placeholder="06:40">
+                    </div>
+                    <div class="field" id="time-field">
+                        <label for="f-time">Tempo alvo (h:mm:ss)</label>
+                        <input id="f-time" name="time" placeholder="4:41:18">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="f-tolerance">Faixa: ± <span id="tolerance-out"></span> s</label>
+                        <input id="f-tolerance" name="tolerance" type="range" min="0" max="30" step="1">
+                    </div>
+                    <div class="field">
+                        <label for="f-split">Parciais a cada</label>
+                        <select id="f-split" name="split">
+                            <option value="1">1 km</option>
+                            <option value="5">5 km</option>
+                            <option value="10">10 km</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="f-date">Data da prova</label>
+                    <input id="f-date" name="date" type="date">
+                    <div class="hint">O calendário de semanas supõe prova no domingo.</div>
+                </div>
+                <div class="error" id="calc-error"></div>
+            </form>
+            <div class="stack" id="calc-results"></div>
+        </div>
+    </section>
+
+    <section class="tab" id="tab-mapa">
+        <div class="map-layout">
+            <aside class="card map-panel">
+                <h2>Montar percurso</h2>
+                <p class="small muted" style="margin:0">Clique no mapa para marcar o início e os pontos do caminho.</p>
+                <div class="field" style="margin-top:12px">
+                    <input id="map-search" placeholder="Buscar lugar (ex.: Marco Zero, Recife)">
+                </div>
+                <label class="toggle"><input type="checkbox" id="map-snap" checked> Seguir ruas a pé</label>
+                <div class="map-tools">
+                    <button class="btn" id="map-undo" type="button">Desfazer</button>
+                    <button class="btn" id="map-loop" type="button">Voltar ao início</button>
+                    <button class="btn" id="map-back" type="button">Ida e volta</button>
+                    <button class="btn" id="map-clear" type="button">Limpar</button>
+                </div>
+                <div class="field" style="margin-top:12px">
+                    <label for="map-target">Treino do plano</label>
+                    <select id="map-target"></select>
+                </div>
+                <div id="map-stats"></div>
+                <div class="field">
+                    <label for="route-name">Nome do percurso</label>
+                    <input id="route-name" placeholder="Longão Boa Viagem">
+                </div>
+                <div class="actions">
+                    <button class="btn primary" id="map-gpx" type="button">Baixar GPX</button>
+                    <button class="btn" id="map-save" type="button">Salvar aqui</button>
+                </div>
+                <details class="help">
+                    <summary>Como levar para o relógio</summary>
+                    <ol class="small">
+                        <li>Baixe o GPX.</li>
+                        <li>Em <a href="https://connect.garmin.com/modern/courses" target="_blank" rel="noopener">connect.garmin.com → Treinamento e planejamento → Percursos</a>, clique em <b>Importar</b> e escolha o arquivo. Tipo: corrida.</li>
+                        <li>Abra o percurso e use <b>Enviar para o dispositivo</b>. Sincronize o relógio.</li>
+                        <li>No relógio: START → Corrida → segure UP → Navegação → Percursos → Fazer percurso.</li>
+                        <li>Para pace constante no percurso: no mesmo percurso, PacePro → Criar novo → pace alvo.</li>
+                    </ol>
+                    <p class="small muted">Percurso é diferente de treino. A tela "Importar dados" continua recusando treinos.</p>
+                </details>
+                <h3>Percursos salvos</h3>
+                <ul class="saved" id="saved-routes"></ul>
+            </aside>
+            <div id="map"></div>
+        </div>
+    </section>
+
+    <section class="tab" id="tab-relogio">
+        <div class="grid two" id="watch"></div>
+    </section>
+
+    <section class="tab" id="tab-manual">
+        <article class="card manual" id="manual"><p class="muted">Carregando manual…</p></article>
+    </section>
+</main>
+
+<div id="toast" role="status"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.29.3/full/pyodide.js"></script>
+<script src="assets/app.js?v=2"></script>
+</body>
+</html>

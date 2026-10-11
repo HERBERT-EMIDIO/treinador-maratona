@@ -1,0 +1,854 @@
+{
+  "meta": {
+    "planner_version": "1.1.0",
+    "generated_at": "2026-10-11T11:30:32-03:00",
+    "manual": "PLANO_MARATONA_GARMIN.md"
+  },
+  "event": {
+    "name": "Maratona Maurício de Nassau",
+    "city": "Recife",
+    "date": "2026-11-01"
+  },
+  "watch": {
+    "model": "Forerunner 165",
+    "line": "Forerunner",
+    "cataloged_line": true,
+    "exact_model": true,
+    "input_style": "Cinco botões (LIGHT, UP, DOWN, START/STOP, BACK) e toque. Durante a atividade, BACK marca a volta e avança a etapa do treino. UP e DOWN trocam as telas. Com suor, use os botões.",
+    "navigation": "165 e 265 seguem o traçado do curso e o TracBack. A 965 traz mapa topográfico embarcado, ClimbPro e Stamina.",
+    "metrics": "165: HRV Status, Body Battery, sono, VO2, tempo de recuperação, Training Effect e PacePro. Da 265 em diante: Training Status e Training Readiness. 965: Stamina, Endurance Score e Hill Score.",
+    "battery": "No 165, a Garmin declara cerca de 19 h em GPS apenas, sem música, e cerca de 7 h com música. Numa maratona perto de 5 h, GPS apenas e música desligada.",
+    "setup_steps": [
+      "Envie o treino pelo Garmin Connect e espere o sincronismo terminar.",
+      "Para iniciar o treino: START, Corrida, UP, Treino, Treinos, escolha o treino, START, Fazer treino, START.",
+      "Volta automática: segure UP, Atividades e aplicativos, Corrida, Voltas, Auto Lap, Por distância, 1,00 km.",
+      "Alerta de faixa: configurações da Corrida, Alertas, ritmo, com os limites rápido e lento da zona.",
+      "Telas de dados: segure UP, Atividades e aplicativos, Corrida, Telas de dados. Deixe a primeira tela curta."
+    ],
+    "screen_recommendations": [
+      "Faixa de ritmo: 06:30 a 06:50 min/km (alvo 06:40).",
+      "Tela 1: ritmo atual, ritmo da volta, distância, frequência cardíaca e cronômetro.",
+      "Tela 2: ritmo médio da prova e hora do dia.",
+      "Auto Lap de 1,00 km. Os acumulados de 5 km do plano servem de conferência, não de volta do relógio.",
+      "Fora da prova, mantenha no loop de visões: HRV Status, Body Battery, sono e tempo de recuperação.",
+      "Prova: START, Corrida, segure UP, Treino, Planos PacePro, aceite o plano de pace constante.",
+      "O PacePro mostra o ritmo do trecho, o ritmo alvo e se você está à frente ou atrás no tempo."
+    ],
+    "model_notes": [
+      "Manhã do longão neste modelo: HRV Status, Body Battery, sono e tempo de recuperação.",
+      "Training Readiness e Training Status não fazem parte do Forerunner 165.",
+      "No dia da prova, use PacePro com pace constante. Não há ClimbPro, Stamina nem mapa topográfico embarcado.",
+      "Versão Music: deixe a música desligada para ficar na autonomia de GPS apenas."
+    ]
+  },
+  "target": {
+    "distance_km": 42.195,
+    "pace": "06:40",
+    "pace_seconds_per_km": 400,
+    "speed_kmh": 9.0,
+    "finish_time": "04:41:18",
+    "finish_seconds": 16878,
+    "split_km": 5,
+    "tolerance_seconds": 10
+  },
+  "pace_zone": {
+    "faster_pace": "06:30",
+    "target_pace": "06:40",
+    "slower_pace": "06:50",
+    "faster_finish": "04:34:16",
+    "target_finish": "04:41:18",
+    "slower_finish": "04:48:20"
+  },
+  "splits": [
+    {
+      "mark_km": 5,
+      "segment_km": 5,
+      "segment_time": "00:33:20",
+      "segment_seconds": 2000,
+      "cumulative_time": "00:33:20",
+      "cumulative_seconds": 2000,
+      "pace": "06:40"
+    },
+    {
+      "mark_km": 10,
+      "segment_km": 5,
+      "segment_time": "00:33:20",
+      "segment_seconds": 2000,
+      "cumulative_time": "01:06:40",
+      "cumulative_seconds": 4000,
+      "pace": "06:40"
+    },
+    {
+      "mark_km": 15,
+      "segment_km": 5,
+      "segment_time": "00:33:20",
+      "segment_seconds": 2000,
+      "cumulative_time": "01:40:00",
+      "cumulative_seconds": 6000,
+      "pace": "06:40"
+    },
+    {
+      "mark_km": 20,
+      "segment_km": 5,
+      "segment_time": "00:33:20",
+      "segment_seconds": 2000,
+      "cumulative_time": "02:13:20",
+      "cumulative_seconds": 8000,
+      "pace": "06:40"
+    },
+    {
+      "mark_km": 25,
+      "segment_km": 5,
+      "segment_time": "00:33:20",
+      "segment_seconds": 2000,
+      "cumulative_time": "02:46:40",
+      "cumulative_seconds": 10000,
+      "pace": "06:40"
+    },
+    {
+      "mark_km": 30,
+      "segment_km": 5,
+      "segment_time": "00:33:20",
+      "segment_seconds": 2000,
+      "cumulative_time": "03:20:00",
+      "cumulative_seconds": 12000,
+      "pace": "06:40"
+    },
+    {
+      "mark_km": 35,
+      "segment_km": 5,
+      "segment_time": "00:33:20",
+      "segment_seconds": 2000,
+      "cumulative_time": "03:53:20",
+      "cumulative_seconds": 14000,
+      "pace": "06:40"
+    },
+    {
+      "mark_km": 40,
+      "segment_km": 5,
+      "segment_time": "00:33:20",
+      "segment_seconds": 2000,
+      "cumulative_time": "04:26:40",
+      "cumulative_seconds": 16000,
+      "pace": "06:40"
+    },
+    {
+      "mark_km": 42.195,
+      "segment_km": 2.195,
+      "segment_time": "00:14:38",
+      "segment_seconds": 878,
+      "cumulative_time": "04:41:18",
+      "cumulative_seconds": 16878,
+      "pace": "06:40"
+    }
+  ],
+  "models": [
+    "Enduro 2",
+    "Epix",
+    "Fenix 7",
+    "Forerunner 165",
+    "Forerunner 265",
+    "Forerunner 965",
+    "Instinct 2",
+    "Instinct 3",
+    "Venu 3",
+    "Vivoactive 5"
+  ],
+  "training": {
+    "root": "Treinos",
+    "files_ready": true,
+    "weeks": [
+      {
+        "number": 1,
+        "folder": "semana-1_12-out-a-18-out",
+        "start": "2026-10-12",
+        "end": "2026-10-18",
+        "race_week": false,
+        "planned_km": 53,
+        "days": [
+          {
+            "date": "2026-10-12",
+            "weekday": "Segunda",
+            "folder": "semana-1_12-out-a-18-out/1-segunda",
+            "race": false,
+            "rest": true,
+            "run": null,
+            "strength": null
+          },
+          {
+            "date": "2026-10-13",
+            "weekday": "Terça",
+            "folder": "semana-1_12-out-a-18-out/2-terca",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "ritmo-10",
+              "name": "13out Ritmo10k",
+              "description": "15 min de aquecimento + 10 km em 06:30–06:50 min/km + 10 min de desaquecimento",
+              "distance_km": 10,
+              "pace_km": 10,
+              "pace_time": "01:06:40",
+              "segments": [
+                {
+                  "label": "Aquecimento",
+                  "unit": "min",
+                  "amount": 15,
+                  "target": "livre"
+                },
+                {
+                  "label": "Ritmo maratona",
+                  "unit": "km",
+                  "amount": 10,
+                  "target": "pace"
+                },
+                {
+                  "label": "Desaquecimento",
+                  "unit": "min",
+                  "amount": 10,
+                  "target": "livre"
+                }
+              ],
+              "file": "semana-1_12-out-a-18-out/2-terca/treino-corrida/2026-10-13_ritmo-10km.fit"
+            },
+            "strength": null
+          },
+          {
+            "date": "2026-10-14",
+            "weekday": "Quarta",
+            "folder": "semana-1_12-out-a-18-out/3-quarta",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "leve-8",
+              "name": "14out Leve8k",
+              "description": "8 km leve, FC na zona 2",
+              "distance_km": 8,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Leve Z2",
+                  "unit": "km",
+                  "amount": 8,
+                  "target": "z2"
+                }
+              ],
+              "file": "semana-1_12-out-a-18-out/3-quarta/treino-corrida/2026-10-14_leve-8km.fit"
+            },
+            "strength": {
+              "key": "A",
+              "name": "14out ForcaA",
+              "label": "Força A (quadríceps, glúteo, tronco)",
+              "exercises": [
+                {
+                  "label": "Agachamento goblet",
+                  "sets": 3,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 90,
+                  "per_side": false
+                },
+                {
+                  "label": "Afundo reverso",
+                  "sets": 3,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 90,
+                  "per_side": true
+                },
+                {
+                  "label": "Ponte de glúteo",
+                  "sets": 3,
+                  "reps": 10,
+                  "seconds": 0,
+                  "rest_seconds": 60,
+                  "per_side": false
+                },
+                {
+                  "label": "Caminhada lateral com mini band",
+                  "sets": 2,
+                  "reps": 12,
+                  "seconds": 0,
+                  "rest_seconds": 45,
+                  "per_side": true
+                },
+                {
+                  "label": "Prancha frontal",
+                  "sets": 3,
+                  "reps": 0,
+                  "seconds": 40,
+                  "rest_seconds": 45,
+                  "per_side": false
+                },
+                {
+                  "label": "Prancha lateral",
+                  "sets": 2,
+                  "reps": 0,
+                  "seconds": 30,
+                  "rest_seconds": 45,
+                  "per_side": true
+                }
+              ],
+              "file": "semana-1_12-out-a-18-out/3-quarta/treino-forca/2026-10-14_forca-a.fit"
+            }
+          },
+          {
+            "date": "2026-10-15",
+            "weekday": "Quinta",
+            "folder": "semana-1_12-out-a-18-out/4-quinta",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "leve-6",
+              "name": "15out Leve6k",
+              "description": "6 km leve, FC na zona 2",
+              "distance_km": 6,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Leve Z2",
+                  "unit": "km",
+                  "amount": 6,
+                  "target": "z2"
+                }
+              ],
+              "file": "semana-1_12-out-a-18-out/4-quinta/treino-corrida/2026-10-15_leve-6km.fit"
+            },
+            "strength": {
+              "key": "B",
+              "name": "15out ForcaB",
+              "label": "Força B (posterior, panturrilha, core)",
+              "exercises": [
+                {
+                  "label": "Levantamento terra romeno",
+                  "sets": 3,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 90,
+                  "per_side": false
+                },
+                {
+                  "label": "Romeno unilateral",
+                  "sets": 3,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 90,
+                  "per_side": true
+                },
+                {
+                  "label": "Panturrilha em pé",
+                  "sets": 3,
+                  "reps": 12,
+                  "seconds": 0,
+                  "rest_seconds": 60,
+                  "per_side": false
+                },
+                {
+                  "label": "Panturrilha sentado (sóleo)",
+                  "sets": 3,
+                  "reps": 15,
+                  "seconds": 0,
+                  "rest_seconds": 60,
+                  "per_side": false
+                },
+                {
+                  "label": "Dead bug",
+                  "sets": 3,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 45,
+                  "per_side": true
+                },
+                {
+                  "label": "Bird dog",
+                  "sets": 2,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 45,
+                  "per_side": true
+                }
+              ],
+              "file": "semana-1_12-out-a-18-out/4-quinta/treino-forca/2026-10-15_forca-b.fit"
+            }
+          },
+          {
+            "date": "2026-10-16",
+            "weekday": "Sexta",
+            "folder": "semana-1_12-out-a-18-out/5-sexta",
+            "race": false,
+            "rest": true,
+            "run": null,
+            "strength": null
+          },
+          {
+            "date": "2026-10-17",
+            "weekday": "Sábado",
+            "folder": "semana-1_12-out-a-18-out/6-sabado",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "trote-5",
+              "name": "17out Trote5k",
+              "description": "5 km de trote livre",
+              "distance_km": 5,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Trote",
+                  "unit": "km",
+                  "amount": 5,
+                  "target": "livre"
+                }
+              ],
+              "file": "semana-1_12-out-a-18-out/6-sabado/treino-corrida/2026-10-17_trote-5km.fit"
+            },
+            "strength": null
+          },
+          {
+            "date": "2026-10-18",
+            "weekday": "Domingo",
+            "folder": "semana-1_12-out-a-18-out/7-domingo",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "longao-24",
+              "name": "18out Longao24k",
+              "description": "16 km leve, FC na zona 2 + 8 km em 06:30–06:50 min/km + 5 min de desaquecimento",
+              "distance_km": 24,
+              "pace_km": 8,
+              "pace_time": "00:53:20",
+              "segments": [
+                {
+                  "label": "Longao Z2",
+                  "unit": "km",
+                  "amount": 16,
+                  "target": "z2"
+                },
+                {
+                  "label": "Ritmo maratona",
+                  "unit": "km",
+                  "amount": 8,
+                  "target": "pace"
+                },
+                {
+                  "label": "Desaquecimento",
+                  "unit": "min",
+                  "amount": 5,
+                  "target": "livre"
+                }
+              ],
+              "file": "semana-1_12-out-a-18-out/7-domingo/treino-corrida/2026-10-18_longao-24km.fit"
+            },
+            "strength": null
+          }
+        ]
+      },
+      {
+        "number": 2,
+        "folder": "semana-2_19-out-a-25-out",
+        "start": "2026-10-19",
+        "end": "2026-10-25",
+        "race_week": false,
+        "planned_km": 41,
+        "days": [
+          {
+            "date": "2026-10-19",
+            "weekday": "Segunda",
+            "folder": "semana-2_19-out-a-25-out/1-segunda",
+            "race": false,
+            "rest": true,
+            "run": null,
+            "strength": null
+          },
+          {
+            "date": "2026-10-20",
+            "weekday": "Terça",
+            "folder": "semana-2_19-out-a-25-out/2-terca",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "ritmo-8",
+              "name": "20out Ritmo8k",
+              "description": "15 min de aquecimento + 8 km em 06:30–06:50 min/km + 10 min de desaquecimento",
+              "distance_km": 8,
+              "pace_km": 8,
+              "pace_time": "00:53:20",
+              "segments": [
+                {
+                  "label": "Aquecimento",
+                  "unit": "min",
+                  "amount": 15,
+                  "target": "livre"
+                },
+                {
+                  "label": "Ritmo maratona",
+                  "unit": "km",
+                  "amount": 8,
+                  "target": "pace"
+                },
+                {
+                  "label": "Desaquecimento",
+                  "unit": "min",
+                  "amount": 10,
+                  "target": "livre"
+                }
+              ],
+              "file": "semana-2_19-out-a-25-out/2-terca/treino-corrida/2026-10-20_ritmo-8km.fit"
+            },
+            "strength": null
+          },
+          {
+            "date": "2026-10-21",
+            "weekday": "Quarta",
+            "folder": "semana-2_19-out-a-25-out/3-quarta",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "leve-7",
+              "name": "21out Leve7k",
+              "description": "7 km leve, FC na zona 2",
+              "distance_km": 7,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Leve Z2",
+                  "unit": "km",
+                  "amount": 7,
+                  "target": "z2"
+                }
+              ],
+              "file": "semana-2_19-out-a-25-out/3-quarta/treino-corrida/2026-10-21_leve-7km.fit"
+            },
+            "strength": {
+              "key": "reduzida",
+              "name": "21out ForcaRed",
+              "label": "Força reduzida (2 séries, sem carga nova)",
+              "exercises": [
+                {
+                  "label": "Agachamento goblet",
+                  "sets": 2,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 90,
+                  "per_side": false
+                },
+                {
+                  "label": "Afundo reverso",
+                  "sets": 2,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 90,
+                  "per_side": true
+                },
+                {
+                  "label": "Levantamento terra romeno",
+                  "sets": 2,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 90,
+                  "per_side": false
+                },
+                {
+                  "label": "Panturrilha sentado (sóleo)",
+                  "sets": 2,
+                  "reps": 15,
+                  "seconds": 0,
+                  "rest_seconds": 60,
+                  "per_side": false
+                },
+                {
+                  "label": "Prancha frontal",
+                  "sets": 2,
+                  "reps": 0,
+                  "seconds": 40,
+                  "rest_seconds": 45,
+                  "per_side": false
+                },
+                {
+                  "label": "Dead bug",
+                  "sets": 2,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 45,
+                  "per_side": true
+                }
+              ],
+              "file": "semana-2_19-out-a-25-out/3-quarta/treino-forca/2026-10-21_forca-reduzida.fit"
+            }
+          },
+          {
+            "date": "2026-10-22",
+            "weekday": "Quinta",
+            "folder": "semana-2_19-out-a-25-out/4-quinta",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "leve-6",
+              "name": "22out Leve6k",
+              "description": "6 km leve, FC na zona 2",
+              "distance_km": 6,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Leve Z2",
+                  "unit": "km",
+                  "amount": 6,
+                  "target": "z2"
+                }
+              ],
+              "file": "semana-2_19-out-a-25-out/4-quinta/treino-corrida/2026-10-22_leve-6km.fit"
+            },
+            "strength": null
+          },
+          {
+            "date": "2026-10-23",
+            "weekday": "Sexta",
+            "folder": "semana-2_19-out-a-25-out/5-sexta",
+            "race": false,
+            "rest": true,
+            "run": null,
+            "strength": null
+          },
+          {
+            "date": "2026-10-24",
+            "weekday": "Sábado",
+            "folder": "semana-2_19-out-a-25-out/6-sabado",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "trote-4",
+              "name": "24out Trote4k",
+              "description": "4 km de trote livre",
+              "distance_km": 4,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Trote",
+                  "unit": "km",
+                  "amount": 4,
+                  "target": "livre"
+                }
+              ],
+              "file": "semana-2_19-out-a-25-out/6-sabado/treino-corrida/2026-10-24_trote-4km.fit"
+            },
+            "strength": null
+          },
+          {
+            "date": "2026-10-25",
+            "weekday": "Domingo",
+            "folder": "semana-2_19-out-a-25-out/7-domingo",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "longao-16",
+              "name": "25out Longao16k",
+              "description": "10 km leve, FC na zona 2 + 6 km em 06:30–06:50 min/km + 5 min de desaquecimento",
+              "distance_km": 16,
+              "pace_km": 6,
+              "pace_time": "00:40:00",
+              "segments": [
+                {
+                  "label": "Longao Z2",
+                  "unit": "km",
+                  "amount": 10,
+                  "target": "z2"
+                },
+                {
+                  "label": "Ritmo maratona",
+                  "unit": "km",
+                  "amount": 6,
+                  "target": "pace"
+                },
+                {
+                  "label": "Desaquecimento",
+                  "unit": "min",
+                  "amount": 5,
+                  "target": "livre"
+                }
+              ],
+              "file": "semana-2_19-out-a-25-out/7-domingo/treino-corrida/2026-10-25_longao-16km.fit"
+            },
+            "strength": null
+          }
+        ]
+      },
+      {
+        "number": 3,
+        "folder": "semana-3_26-out-a-01-nov-prova",
+        "start": "2026-10-26",
+        "end": "2026-11-01",
+        "race_week": true,
+        "planned_km": 17,
+        "days": [
+          {
+            "date": "2026-10-26",
+            "weekday": "Segunda",
+            "folder": "semana-3_26-out-a-01-nov-prova/1-segunda",
+            "race": false,
+            "rest": true,
+            "run": null,
+            "strength": null
+          },
+          {
+            "date": "2026-10-27",
+            "weekday": "Terça",
+            "folder": "semana-3_26-out-a-01-nov-prova/2-terca",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "ritmo-4",
+              "name": "27out Ritmo4k",
+              "description": "10 min de aquecimento + 4 km em 06:30–06:50 min/km + 10 min de desaquecimento",
+              "distance_km": 4,
+              "pace_km": 4,
+              "pace_time": "00:26:40",
+              "segments": [
+                {
+                  "label": "Aquecimento",
+                  "unit": "min",
+                  "amount": 10,
+                  "target": "livre"
+                },
+                {
+                  "label": "Ritmo maratona",
+                  "unit": "km",
+                  "amount": 4,
+                  "target": "pace"
+                },
+                {
+                  "label": "Desaquecimento",
+                  "unit": "min",
+                  "amount": 10,
+                  "target": "livre"
+                }
+              ],
+              "file": "semana-3_26-out-a-01-nov-prova/2-terca/treino-corrida/2026-10-27_ritmo-4km.fit"
+            },
+            "strength": null
+          },
+          {
+            "date": "2026-10-28",
+            "weekday": "Quarta",
+            "folder": "semana-3_26-out-a-01-nov-prova/3-quarta",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "leve-5",
+              "name": "28out Leve5k",
+              "description": "5 km leve, FC na zona 2",
+              "distance_km": 5,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Leve Z2",
+                  "unit": "km",
+                  "amount": 5,
+                  "target": "z2"
+                }
+              ],
+              "file": "semana-3_26-out-a-01-nov-prova/3-quarta/treino-corrida/2026-10-28_leve-5km.fit"
+            },
+            "strength": {
+              "key": "ativacao",
+              "name": "28out Ativacao",
+              "label": "Ativação leve (semana da prova)",
+              "exercises": [
+                {
+                  "label": "Panturrilha sentado (sóleo)",
+                  "sets": 2,
+                  "reps": 12,
+                  "seconds": 0,
+                  "rest_seconds": 60,
+                  "per_side": false
+                },
+                {
+                  "label": "Dead bug",
+                  "sets": 2,
+                  "reps": 8,
+                  "seconds": 0,
+                  "rest_seconds": 45,
+                  "per_side": true
+                }
+              ],
+              "file": "semana-3_26-out-a-01-nov-prova/3-quarta/treino-forca/2026-10-28_ativacao.fit"
+            }
+          },
+          {
+            "date": "2026-10-29",
+            "weekday": "Quinta",
+            "folder": "semana-3_26-out-a-01-nov-prova/4-quinta",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "leve-5",
+              "name": "29out Leve5k",
+              "description": "5 km leve, FC na zona 2",
+              "distance_km": 5,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Leve Z2",
+                  "unit": "km",
+                  "amount": 5,
+                  "target": "z2"
+                }
+              ],
+              "file": "semana-3_26-out-a-01-nov-prova/4-quinta/treino-corrida/2026-10-29_leve-5km.fit"
+            },
+            "strength": null
+          },
+          {
+            "date": "2026-10-30",
+            "weekday": "Sexta",
+            "folder": "semana-3_26-out-a-01-nov-prova/5-sexta",
+            "race": false,
+            "rest": true,
+            "run": null,
+            "strength": null
+          },
+          {
+            "date": "2026-10-31",
+            "weekday": "Sábado",
+            "folder": "semana-3_26-out-a-01-nov-prova/6-sabado",
+            "race": false,
+            "rest": false,
+            "run": {
+              "key": "trote-3",
+              "name": "31out Trote3k",
+              "description": "3 km de trote livre",
+              "distance_km": 3,
+              "pace_km": 0,
+              "pace_time": "00:00:00",
+              "segments": [
+                {
+                  "label": "Trote",
+                  "unit": "km",
+                  "amount": 3,
+                  "target": "livre"
+                }
+              ],
+              "file": "semana-3_26-out-a-01-nov-prova/6-sabado/treino-corrida/2026-10-31_trote-3km.fit"
+            },
+            "strength": null
+          },
+          {
+            "date": "2026-11-01",
+            "weekday": "Domingo",
+            "folder": "semana-3_26-out-a-01-nov-prova/7-domingo",
+            "race": true,
+            "rest": false,
+            "run": null,
+            "strength": null
+          }
+        ]
+      }
+    ]
+  }
+}
