@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Treinador Maratona</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="assets/app.css?v=2">
+    <link rel="stylesheet" href="assets/app.css?v=3">
 </head>
 <body>
 <header class="topbar">
@@ -96,10 +96,31 @@
                         </select>
                     </div>
                 </div>
+                <h2 style="margin-top:8px">Prova e plano</h2>
+                <div class="row">
+                    <div class="field">
+                        <label for="f-event">Nome da prova</label>
+                        <input id="f-event" name="event" maxlength="60">
+                    </div>
+                    <div class="field">
+                        <label for="f-city">Cidade</label>
+                        <input id="f-city" name="city" maxlength="40">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="field">
+                        <label for="f-date">Data da prova</label>
+                        <input id="f-date" name="date" type="date">
+                    </div>
+                    <div class="field">
+                        <label for="f-start">Início do plano</label>
+                        <input id="f-start" name="start" type="date">
+                    </div>
+                </div>
                 <div class="field">
-                    <label for="f-date">Data da prova</label>
-                    <input id="f-date" name="date" type="date">
-                    <div class="hint">O calendário de semanas supõe prova no domingo.</div>
+                    <label for="f-longao">Maior longão das últimas 4 semanas (km)</label>
+                    <input id="f-longao" name="longao" inputmode="decimal" placeholder="ex.: 14">
+                    <div class="hint">O plano tem até 16 semanas e termina no dia da prova, em qualquer dia da semana. O longão cresce a partir deste valor; em branco, usa o padrão da distância.</div>
                 </div>
                 <div class="error" id="calc-error"></div>
             </form>
@@ -141,8 +162,8 @@
                         <li>Baixe o GPX.</li>
                         <li>Em <a href="https://connect.garmin.com/modern/courses" target="_blank" rel="noopener">connect.garmin.com → Treinamento e planejamento → Percursos</a>, clique em <b>Importar</b> e escolha o arquivo. Tipo: corrida.</li>
                         <li>Abra o percurso e use <b>Enviar para o dispositivo</b>. Sincronize o relógio.</li>
-                        <li>No relógio: START → Corrida → segure UP → Navegação → Percursos → Fazer percurso.</li>
-                        <li>Para pace constante no percurso: no mesmo percurso, PacePro → Criar novo → pace alvo.</li>
+                        <li>No relógio: <span id="course-path">START → Corrida → segure UP → Navegação → Percursos → Fazer percurso</span>.</li>
+                        <li>Para pace constante no percurso: no Garmin Connect, abra o percurso → PacePro → Criar novo → pace alvo.</li>
                     </ol>
                     <p class="small muted">Percurso é diferente de treino. A tela "Importar dados" continua recusando treinos.</p>
                 </details>
@@ -167,6 +188,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.29.3/full/pyodide.js"></script>
-<script src="assets/app.js?v=2"></script>
+<script src="assets/app.js?v=4"></script>
 </body>
 </html>

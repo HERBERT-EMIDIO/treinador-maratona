@@ -34,6 +34,10 @@ const DEFAULT_SETTINGS = {
     date: '2026-11-01',
     tolerance: '10',
     split: '5',
+    event: 'Maratona Maurício de Nassau',
+    city: 'Recife',
+    start: '',
+    longao: '',
 };
 const RECIFE = [-8.0631, -34.8711];
 
@@ -157,10 +161,14 @@ function currentWeek() {
 
 function plannerArgs() {
     const s = state.settings;
-    const args = ['--model', s.model, '--distance', s.distance, '--date', s.date, '--tolerance', s.tolerance, '--split-km', s.split];
-    if (s.mode === 'time' && s.time) args.push('--time', s.time);
-    else args.push('--pace', s.pace);
-    return args;
+    const flags = {
+        model: s.model, distance: s.distance, date: s.date, tolerance: s.tolerance, 'split-km': s.split,
+        event: s.event, city: s.city, inicio: s.start,
+    };
+    if (s.mode === 'time' && s.time) flags.time = s.time;
+    else flags.pace = s.pace;
+    if (String(s.longao).trim()) flags.longao = s.longao;
+    return Object.entries(flags).map(([flag, value]) => `--${flag}=${value}`);
 }
 
 function startEngine() {
@@ -217,6 +225,9 @@ async function downloadWeek(button) {
 }
 
 async function loadInitialPlan() {
+    const custom = Object.keys(DEFAULT_SETTINGS)
+        .some((key) => key !== 'start' && String(state.settings[key]) !== String(DEFAULT_SETTINGS[key]));
+    if (custom) return;
     try {
         const response = await fetch('treino_maratona_config.json', { cache: 'no-cache' });
         if (!response.ok) return;
@@ -317,7 +328,7 @@ function renderToday() {
     const next = days.find((d) => d.date > today && (d.run || d.strength || d.race));
     let html = '<h2>Treino de hoje</h2>';
     if (!days.length) {
-        html += '<p class="muted">O calendário precisa de prova num domingo. Ajuste a data na Calculadora.</p>';
+        html += '<p class="muted">Sem calendário. Confira a data da prova na Calculadora.</p>';
     } else if (todayEntry) {
         html += dayBody(todayEntry, true);
     } else if (today < days[0].date) {
@@ -347,7 +358,7 @@ function renderToday() {
         return `<div><i class="${cls}"></i>${esc(d.weekday.slice(0, 3))}</div>`;
     }).join('');
     $('#week-card').innerHTML = `
-        <h2>Semana ${esc(week.number)} · ${esc(fmtDate(week.start))} a ${esc(fmtDate(week.end))}</h2>
+        <h2>Semana ${esc(week.number)} de ${esc(weeks().length)} · ${esc(fmtDate(week.start))} a ${esc(fmtDate(week.end))} <span class="pill rest" style="margin-left:6px">${esc(week.phase || '')}</span></h2>
         <div class="grid stats">
             <div class="stat"><div class="label">Feitos</div><div class="value">${esc(fmtKm(doneKm, 1))}</div></div>
             <div class="stat"><div class="label">Planejados</div><div class="value">${esc(fmtKm(week.planned_km, 1))}</div></div>
@@ -417,19 +428,23 @@ function renderWeeks() {
     const list = weeks();
     if (!list.length) {
         $('#week-chips').innerHTML = '';
-        $('#files-card').innerHTML = '<p class="muted" style="margin:0">O calendário precisa de prova num domingo. Ajuste a data na Calculadora.</p>';
+        $('#files-card').innerHTML = '<p class="muted" style="margin:0">Sem calendário. Confira a data da prova na Calculadora.</p>';
         $('#days').innerHTML = '';
         return;
     }
     if (!state.week || !list.some((w) => w.number === state.week)) state.week = currentWeek().number;
     $('#week-chips').innerHTML = list.map((w) => `
         <button class="chip ${w.number === state.week ? 'active' : ''}" data-week="${w.number}">
-            Semana ${w.number}<small>${esc(fmtDate(w.start))}–${esc(fmtDate(w.end))}${w.race_week ? ' · prova' : ''}</small>
+            Semana ${w.number}<small>${esc(fmtDate(w.start))}–${esc(fmtDate(w.end))} · ${esc((w.phase || '').toLowerCase())}</small>
         </button>`).join('');
 
     const week = list.find((w) => w.number === state.week);
     const ready = state.engineReady;
+    const training = state.plan.training;
+    const peakKm = Math.max(...list.map((w) => w.planned_km));
+    const start = training.current_long_km ? `partindo de longão de ${fmtKm(training.current_long_km)}` : 'longão inicial padrão da distância';
     $('#files-card').innerHTML = `
+        <p class="small muted" style="margin:0 0 12px">Plano de ${list.length} ${list.length === 1 ? 'semana' : 'semanas'} · perfil ${esc(training.profile || '')} · ${esc(start)} · semana mais pesada ${esc(fmtKm(peakKm, 1))}. Semana ${esc(week.number)}: <b>${esc(week.phase || '')}</b>.</p>
         <div class="day-head">
             <div>
                 <b>Arquivos para o relógio</b>
@@ -444,7 +459,7 @@ function renderWeeks() {
                 <li>Ligue o relógio no computador pelo cabo de carga.</li>
                 <li>Abra o relógio no Explorador de Arquivos → Armazenamento interno → <code>GARMIN</code> → <code>NewFiles</code>.</li>
                 <li>Copie para lá os <code>.fit</code> desta semana (botões "Baixar .fit" ou de dentro do .zip). Só os arquivos, sem as pastas.</li>
-                <li>Desconecte. Corrida: START → Corrida → UP → Treino → Treinos. Força: START → Força → Treinos.</li>
+                <li>Desconecte. Corrida: ${esc(state.plan.watch.paths?.run_workout || '')}. Força: ${esc(state.plan.watch.paths?.strength_workout || '')}.</li>
                 <li>No domingo, apague no relógio os treinos da semana que passou.</li>
             </ol>
             <p class="small muted">A tela "Importar dados" do Garmin Connect recusa treinos. Treinos copiados pelo cabo ficam só no relógio.</p>
@@ -472,6 +487,10 @@ function fillForm() {
     $('#tolerance-out').textContent = s.tolerance;
     $('#f-split').value = s.split;
     $('#f-date').value = s.date;
+    $('#f-event').value = s.event;
+    $('#f-city').value = s.city;
+    $('#f-start').value = s.start;
+    $('#f-longao').value = s.longao;
     syncFormState();
 }
 
@@ -543,8 +562,16 @@ function renderWatch() {
         <div class="stack">
             <div class="card profile"><h2>Configuração</h2><ol>${list(w.setup_steps)}</ol></div>
             <div class="card profile"><h2>Telas e alertas</h2><ul>${list(w.screen_recommendations)}</ul></div>
+            ${w.paths ? `<div class="card profile"><h2>Caminhos no relógio</h2><dl>
+                <div><dt>Treino de corrida</dt><dd>${esc(w.paths.run_workout)}</dd></div>
+                <div><dt>Treino de força</dt><dd>${esc(w.paths.strength_workout)}</dd></div>
+                <div><dt>PacePro (prova)</dt><dd>${esc(w.paths.pacepro)}</dd></div>
+                <div><dt>Percurso do mapa</dt><dd>${esc(w.paths.course)}</dd></div>
+            </dl></div>` : ''}
             ${w.model_notes.length ? `<div class="card profile"><h2>Notas do modelo</h2><ul>${list(w.model_notes)}</ul></div>` : ''}
         </div>`;
+    const course = $('#course-path');
+    if (course && w.paths) course.textContent = w.paths.course;
 }
 
 /* ---------- manual ---------- */
@@ -681,7 +708,8 @@ function renderMapTargets() {
     if (!select || !state.plan) return;
     const current = select.value;
     const options = ['<option value="">Livre (sem distância alvo)</option>'];
-    allDays().forEach((d) => {
+    const from = currentWeek()?.number ?? 1;
+    allDays().filter((d) => d.weekNumber >= from && d.weekNumber <= from + 1).forEach((d) => {
         if (d.run) options.push(`<option value="${d.run.distance_km}">${esc(d.run.name)} · ${esc(fmtKm(d.run.distance_km))}</option>`);
     });
     options.push(`<option value="${state.plan.target.distance_km}">Prova · ${esc(fmtKm(state.plan.target.distance_km, 4))}</option>`);
@@ -878,6 +906,10 @@ function bindEvents() {
 }
 
 function boot() {
+    if (!state.settings.start) {
+        state.settings.start = todayISO();
+        store.set('tm_settings', state.settings);
+    }
     bindEvents();
     fillForm();
     showTab(location.hash.slice(1) || 'hoje');

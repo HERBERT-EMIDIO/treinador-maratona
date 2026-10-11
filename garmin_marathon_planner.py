@@ -24,15 +24,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import struct
 import sys
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 
-PLANNER_VERSION = "1.1.0"
+PLANNER_VERSION = "1.2.0"
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "treino_maratona_config.json"
 DEFAULT_FIT_OUTPUT = Path(__file__).resolve().parent / "treino_ritmo_maratona.fit"
 DEFAULT_BLOCK_KM = "10"
@@ -48,6 +50,8 @@ DEFAULTS: dict[str, object] = {
     "split_km": "5",
     "event_name": "Maratona Maurício de Nassau",
     "event_city": "Recife",
+    "current_long_km": "",
+    "plan_start": "",
 }
 
 ALLOWED_KEYS = set(DEFAULTS)
@@ -68,12 +72,18 @@ class LineProfile:
     battery: str
     setup_steps: tuple[str, ...]
     screen_recommendations: tuple[str, ...]
+    run_workout_path: str
+    strength_workout_path: str
+    pacepro_path: str
+    course_path: str
 
 
 @dataclass(frozen=True)
 class ModelOverride:
     notes: tuple[str, ...]
     extra_screens: tuple[str, ...] = ()
+    metrics: str = ""
+    battery: str = ""
 
 
 @dataclass(frozen=True)
@@ -89,6 +99,10 @@ class ResolvedWatch:
     setup_steps: tuple[str, ...]
     screen_recommendations: tuple[str, ...]
     model_notes: tuple[str, ...]
+    run_workout_path: str
+    strength_workout_path: str
+    pacepro_path: str
+    course_path: str
 
 
 @dataclass(frozen=True)
@@ -107,6 +121,8 @@ class AppConfig:
     trainings_dir: Path | None
     finish_time: str | None = None
     json_only: bool = False
+    current_long_km: object = ""
+    plan_start: str = ""
 
 
 @dataclass(frozen=True)
@@ -156,9 +172,8 @@ LINE_PROFILES: dict[str, LineProfile] = {
             "Training Readiness. 965: Stamina, Endurance Score e Hill Score."
         ),
         battery=(
-            "No 165, a Garmin declara cerca de 19 h em GPS apenas, sem música, "
-            "e cerca de 7 h com música. Numa maratona perto de 5 h, GPS apenas "
-            "e música desligada."
+            "Os Forerunner atuais passam de 18 h em GPS apenas. Numa maratona de até 5 h, "
+            "GPS apenas e música desligada sobram; multibanda e música encurtam a autonomia."
         ),
         setup_steps=(
             "Envie o treino pelo Garmin Connect e espere o sincronismo terminar.",
@@ -173,6 +188,10 @@ LINE_PROFILES: dict[str, LineProfile] = {
             "Auto Lap de 1,00 km. Os acumulados de 5 km do plano servem de conferência, não de volta do relógio.",
             "Fora da prova, mantenha no loop de visões: HRV Status, Body Battery, sono e tempo de recuperação.",
         ),
+        run_workout_path="START → Corrida → UP → Treino → Treinos → treino do dia",
+        strength_workout_path="START → Força → Treinos → treino do dia",
+        pacepro_path="START → Corrida → segure UP → Treino → Planos PacePro → Aceitar plano → START",
+        course_path="START → Corrida → segure UP → Navegação → Percursos → Fazer percurso",
     ),
     "venu": LineProfile(
         line="Venu",
@@ -206,31 +225,40 @@ LINE_PROFILES: dict[str, LineProfile] = {
             "Auto Lap de 1,00 km como volta principal. O Back fica de reserva.",
             "Evite várias páginas por deslize. Suor e garoa atrapalham o toque.",
         ),
+        run_workout_path="Botão de cima → Corrida → role para baixo → Treino → Biblioteca de treinos → treino do dia → Fazer treino",
+        strength_workout_path="Botão de cima → Força → Treinos → treino do dia → Fazer treino",
+        pacepro_path="Botão de cima → Corrida → deslize para cima → Treino → Planos PacePro → plano → Usar plano",
+        course_path="Botão de cima → Corrida → deslize para cima → Navegação → Percursos → percurso → Fazer percurso",
     ),
     "vivoactive": LineProfile(
         line="Vívoactive",
         input_style=(
-            "Interface conduzida pelo toque, com poucos botões físicos. "
-            "A volta manual depende do modelo. A configuração estável de prova "
-            "é a volta automática."
+            "Dois botões e toque: START (em cima) abre as atividades e inicia/para o cronômetro; "
+            "BACK (embaixo) volta. Na corrida, o BACK só marca volta se a Tecla de volta estiver ligada "
+            "nas configurações da atividade. A configuração estável de prova é o Auto Lap."
         ),
-        navigation="Curso simples quando o modelo oferece. Sem mapa topográfico da linha Fenix.",
+        navigation="Segue percurso enviado pelo Garmin Connect e tem TracBack. Sem mapa embarcado.",
         metrics=(
-            "Foco em saúde diária, sono e Body Battery. A decisão do longão "
-            "usa esses sinais e a sensação das pernas. Confira no seu modelo "
-            "se o HRV Status está disponível."
+            "HRV Status no sono, Body Battery, pontuação de sono, VO2 e tempo de recuperação. "
+            "Training Readiness e Training Status não fazem parte da linha: a decisão do longão "
+            "usa HRV, Body Battery, sono e a sensação das pernas."
         ),
         battery="Carga cheia na véspera. GPS contínuo por cerca de 5 h cabe no uso normal de prova.",
         setup_steps=(
-            "Crie o treino no Garmin Connect, envie ao relógio e abra a atividade Corrida.",
-            "Inicie pelo calendário do dia ou pela lista de treinos da atividade.",
-            "Ative Auto Lap por distância em 1,00 km antes do longão de teste.",
-            "Configure o alerta de faixa de ritmo com os limites da zona.",
+            "Crie o treino no Garmin Connect e sincronize, ou copie o .fit pelo cabo.",
+            "Para iniciar: START → Atividades → Corrida → role para baixo → Treino → Biblioteca de treinos → treino → Fazer treino → START.",
+            "Auto Lap: na face do relógio, deslize para a esquerda → Atividades → Corrida → configurações da atividade → Auto Lap → Por distância → 1,00 km.",
+            "Alerta de faixa: nas mesmas configurações, Alertas → Ritmo, com os limites rápido e lento da zona.",
+            "Se quiser marcar volta no botão: configurações da Corrida → Voltas → Tecla de volta.",
         ),
         screen_recommendations=(
             "Tela única e números grandes: ritmo, distância, frequência cardíaca e cronômetro.",
             "Auto Lap de 1,00 km. Não conte com um toque preciso depois do km 30.",
         ),
+        run_workout_path="START → Atividades → Corrida → role para baixo → Treino → Biblioteca de treinos → treino do dia → Fazer treino → START",
+        strength_workout_path="START → Atividades → Academia → Força → Treinos → treino do dia → Fazer treino → START",
+        pacepro_path="START → Corrida → deslize para cima → Treino → Planos PacePro → plano → START → Usar plano → START",
+        course_path="START → Corrida → deslize para cima → Navegação → Percursos → percurso → Fazer percurso",
     ),
     "fenix": LineProfile(
         line="Fenix / Epix / Enduro",
@@ -264,6 +292,10 @@ LINE_PROFILES: dict[str, LineProfile] = {
             "ClimbPro só entra se o percurso tiver subidas longas. Em percurso plano, essa tela sai do loop.",
             "Deixe o mapa fora da tela principal. Ele não segura o pace.",
         ),
+        run_workout_path="START → Corrida → segure MENU → Treino → Treinos → treino do dia → Fazer treino",
+        strength_workout_path="START → Força → segure MENU → Treino → Treinos → treino do dia → Fazer treino",
+        pacepro_path="START → Corrida → segure MENU → Treino → Planos PacePro → plano → Usar plano",
+        course_path="START → Corrida → segure MENU → Navegação → Percursos → Fazer percurso",
     ),
     "instinct": LineProfile(
         line="Instinct",
@@ -297,6 +329,10 @@ LINE_PROFILES: dict[str, LineProfile] = {
             "Tela 2: frequência cardíaca e cronômetro.",
             "Alto contraste já resolve a leitura no sol. Não dependa de um mapa que esta linha não embarca.",
         ),
+        run_workout_path="GPS (START) → Corrida → segure MENU → Treino → Treinos → treino do dia → Fazer treino",
+        strength_workout_path="GPS (START) → Força → segure MENU → Treino → Treinos → treino do dia → Fazer treino",
+        pacepro_path="GPS (START) → Corrida → segure MENU → Treino → Planos PacePro → plano → Usar plano",
+        course_path="GPS (START) → Corrida → segure MENU → Navegação → Percursos → Fazer percurso",
     ),
 }
 
@@ -315,6 +351,10 @@ GENERIC_PROFILE = LineProfile(
         "Tela 1: ritmo, distância, frequência cardíaca e cronômetro.",
         "Auto Lap de 1,00 km.",
     ),
+    run_workout_path="Atividade Corrida → Treino → Treinos → treino do dia (os nomes variam por modelo)",
+    strength_workout_path="Atividade Força → Treinos → treino do dia (os nomes variam por modelo)",
+    pacepro_path="Atividade Corrida → Treino → Planos PacePro, se o modelo tiver PacePro",
+    course_path="Atividade Corrida → Navegação → Percursos, se o modelo seguir percurso",
 )
 
 MODEL_OVERRIDES: dict[str, ModelOverride] = {
@@ -329,6 +369,27 @@ MODEL_OVERRIDES: dict[str, ModelOverride] = {
             "Prova: START, Corrida, segure UP, Treino, Planos PacePro, aceite o plano de pace constante.",
             "O PacePro mostra o ritmo do trecho, o ritmo alvo e se você está à frente ou atrás no tempo.",
         ),
+        battery=(
+            "No 165, a Garmin declara cerca de 19 h em GPS apenas, sem música, "
+            "e cerca de 7 h com música. Numa maratona perto de 5 h, GPS apenas "
+            "e música desligada."
+        ),
+    ),
+    "forerunner 55": ModelOverride(
+        notes=(
+            "Sem HRV Status: a manhã do longão usa Body Battery, sono e frequência cardíaca de repouso.",
+            "PacePro disponível para a prova. Sem mapa; navegação por percurso simples.",
+        ),
+        metrics="Body Battery, sono, VO2, tempo de recuperação e PacePro. Sem HRV Status, Training Readiness ou Training Status.",
+        battery="A Garmin declara até 20 h em modo GPS. Uma maratona de até 5 h cabe com folga.",
+    ),
+    "forerunner 255": ModelOverride(
+        notes=(
+            "HRV Status e relatório da manhã entram na decisão do longão, junto com o sono.",
+            "Multibanda existe, mas GPS apenas basta na rua e rende mais bateria.",
+        ),
+        metrics="HRV Status, Training Status, Body Battery, sono, VO2, tempo de recuperação e PacePro.",
+        battery="Até 30 h em GPS apenas, 25 h com todos os sistemas e 16 h em multibanda (255S: 26 h em GPS apenas).",
     ),
     "forerunner 265": ModelOverride(
         notes=(
@@ -349,17 +410,65 @@ MODEL_OVERRIDES: dict[str, ModelOverride] = {
             "GPS apenas. O multibanda pode esperar a trilha.",
         ),
     ),
+    "forerunner 570": ModelOverride(
+        notes=(
+            "Training Readiness, Training Status e HRV Status entram na decisão da manhã.",
+            "Segue percurso por traçado; mapa colorido embarcado é da 970.",
+        ),
+        metrics="Training Readiness, Training Status, HRV Status, Body Battery, sono, VO2, dinâmica de corrida e PacePro.",
+        battery="Até 18 h em modo GPS (47 mm: até 11 dias como smartwatch). Numa maratona de até 5 h, GPS apenas.",
+    ),
+    "forerunner 970": ModelOverride(
+        notes=(
+            "Mapa colorido embarcado, lanterna e métricas de tolerância de corrida.",
+            "Economia de corrida e perda de velocidade por passada exigem a cinta HRM 600.",
+        ),
+        extra_screens=("Deixe o mapa fora da tela principal. GPS apenas na maratona de rua.",),
+        metrics="Training Readiness, Training Status, HRV Status, Stamina, tolerância de corrida, VO2 e PacePro.",
+        battery="Até 26 h em modo GPS e até 15 dias como smartwatch.",
+    ),
     "venu 3": ModelOverride(
         notes=(
             "Não existe um quinto botão de Lap. Durante a atividade, o Back marca a volta e avança a etapa.",
             "HRV Status e Training Status ajudam na semana. ClimbPro e Stamina em tempo real não são o foco desta linha.",
         ),
     ),
+    "venu 4": ModelOverride(
+        notes=(
+            "Dois botões e toque. Training Readiness e Training Status entram na decisão da manhã.",
+            "Multibanda com SatIQ: deixe em SatIQ ou GPS apenas na rua.",
+        ),
+        metrics="Training Readiness, Training Status, HRV Status, Body Battery, sono, VO2, dinâmica de corrida e PacePro.",
+        battery="45 mm: até 20 h em GPS apenas (41 mm: 15 h). Uma maratona de até 5 h cabe com folga.",
+    ),
+    "venu x1": ModelOverride(
+        notes=(
+            "Tela retangular grande, mapa colorido embarcado, ClimbPro e Stamina em tempo real.",
+            "Sem multibanda: use GPS apenas ou todos os sistemas.",
+        ),
+        metrics="Training Readiness, Training Status, HRV Status, Stamina, VO2, dinâmica de corrida e PacePro.",
+        battery="Até 16 h em GPS apenas e 14 h com todos os sistemas. Tela sempre acesa e mapa gastam mais.",
+    ),
     "vivoactive 5": ModelOverride(
         notes=(
             "Trate a prova como tela única mais Auto Lap. O toque é o centro da interface.",
             "Sono e Body Battery guiam o dia do longão. Não espere o pacote de mapa e Stamina da Fenix.",
         ),
+    ),
+    "vivoactive 6": ModelOverride(
+        notes=(
+            "Dois botões (START em cima, BACK embaixo) e toque. Na prova, Auto Lap de 1 km; "
+            "o BACK só marca volta com a Tecla de volta ligada.",
+            "Sem Training Readiness e Training Status: a manhã do longão usa HRV Status, Body Battery e sono.",
+            "Treinos .fit pelo cabo: se o relógio não aparecer no computador, troque o Modo USB "
+            "(Configurações → Sistema → Avançado → Modo USB).",
+            "Força: START → Atividades → Academia → Força. O relógio conta as repetições de cada série.",
+        ),
+        extra_screens=(
+            "Prova: START → Corrida → deslize para cima → Treino → Planos PacePro → Usar plano.",
+        ),
+        metrics="HRV Status, Body Battery, sono, VO2, tempo de recuperação, dinâmica e potência de corrida e PacePro.",
+        battery="Até 21 h em GPS apenas, 17 h com todos os sistemas e 8 h com música. Numa maratona, GPS apenas e sem música.",
     ),
     "fenix 7": ModelOverride(
         notes=(
@@ -414,9 +523,18 @@ def configure_stdio() -> None:
             continue
 
 
+LINE_WORDS = ("forerunner", "vivoactive", "venu", "fenix", "epix", "enduro", "instinct")
+
+
 def normalize_model_key(model: str) -> str:
-    key = " ".join(model.strip().lower().replace("-", " ").split())
-    return ALIASES.get(key, key)
+    plain = unicodedata.normalize("NFKD", model).encode("ascii", "ignore").decode("ascii")
+    key = " ".join(plain.strip().lower().replace("-", " ").split())
+    key = ALIASES.get(key, key)
+    key = re.sub(r"^fr ?(\d)", r"forerunner \1", key)
+    key = re.sub(r"^va ?(\d)", r"vivoactive \1", key)
+    for word in LINE_WORDS:
+        key = re.sub(rf"\b{word}(?=\d)", f"{word} ", key)
+    return key
 
 
 def detect_line(model_key: str) -> str | None:
@@ -475,11 +593,15 @@ def resolve_watch(model: str) -> ResolvedWatch:
         exact_model=override is not None,
         input_style=profile.input_style,
         navigation=profile.navigation,
-        metrics=profile.metrics,
-        battery=profile.battery,
+        metrics=(override.metrics if override and override.metrics else profile.metrics),
+        battery=(override.battery if override and override.battery else profile.battery),
         setup_steps=profile.setup_steps,
         screen_recommendations=profile.screen_recommendations + extra,
         model_notes=tuple(notes),
+        run_workout_path=profile.run_workout_path,
+        strength_workout_path=profile.strength_workout_path,
+        pacepro_path=profile.pacepro_path,
+        course_path=profile.course_path,
     )
 
 
@@ -718,7 +840,7 @@ class StrengthSession:
 
 @dataclass(frozen=True)
 class DayPlan:
-    run: str | None = None
+    run: RunSession | None = None
     strength: str | None = None
     race: bool = False
 
@@ -726,7 +848,31 @@ class DayPlan:
 @dataclass(frozen=True)
 class TrainingWeek:
     weeks_before_race: int
+    phase: str
     days: tuple[DayPlan, ...]
+
+
+@dataclass(frozen=True)
+class WeekVolume:
+    quality: int
+    easy: int
+    easy_short: int
+    jog: int
+    long_z2: int = 0
+    long_pace: int = 0
+
+
+@dataclass(frozen=True)
+class DistanceProfile:
+    name: str
+    max_km: Decimal
+    pace_label: str
+    start_long: int
+    peak_long: int
+    long_step: int
+    long_pace_share: Decimal
+    peak_week: WeekVolume
+    taper: tuple[WeekVolume, WeekVolume, WeekVolume]
 
 
 def warmup(minutes: int) -> RunSegment:
@@ -737,8 +883,8 @@ def cooldown(minutes: int) -> RunSegment:
     return RunSegment("Desaquecimento", "min", Decimal(minutes), "livre", FIT_INTENSITY_COOLDOWN)
 
 
-def pace_block(km: object) -> RunSegment:
-    return RunSegment("Ritmo maratona", "km", Decimal(str(km)), "pace")
+def pace_block(km: object, label: str = "Ritmo maratona") -> RunSegment:
+    return RunSegment(label, "km", Decimal(str(km)), "pace")
 
 
 def easy(km: object, label: str = "Leve Z2") -> RunSegment:
@@ -749,15 +895,23 @@ def jog(km: object) -> RunSegment:
     return RunSegment("Trote", "km", Decimal(str(km)), "livre")
 
 
-RUN_SESSIONS: dict[str, RunSession] = {
-    "ritmo-10": RunSession("Ritmo10k", "ritmo-10km", (warmup(15), pace_block(10), cooldown(10))),
-    "ritmo-8": RunSession("Ritmo8k", "ritmo-8km", (warmup(15), pace_block(8), cooldown(10))),
-    "ritmo-4": RunSession("Ritmo4k", "ritmo-4km", (warmup(10), pace_block(4), cooldown(10))),
-    "longao-24": RunSession("Longao24k", "longao-24km", (easy(16, "Longao Z2"), pace_block(8), cooldown(5))),
-    "longao-16": RunSession("Longao16k", "longao-16km", (easy(10, "Longao Z2"), pace_block(6), cooldown(5))),
-    **{f"leve-{km}": RunSession(f"Leve{km}k", f"leve-{km}km", (easy(km),)) for km in (5, 6, 7, 8)},
-    **{f"trote-{km}": RunSession(f"Trote{km}k", f"trote-{km}km", (jog(km),)) for km in (3, 4, 5)},
-}
+def ritmo_session(km: int, label: str) -> RunSession:
+    return RunSession(f"Ritmo{km}k", f"ritmo-{km}km", (warmup(15 if km >= 6 else 10), pace_block(km, label), cooldown(10)))
+
+
+def longao_session(z2_km: int, pace_km: int, label: str) -> RunSession:
+    total = z2_km + pace_km
+    finish = (pace_block(pace_km, label),) if pace_km else ()
+    slug = f"longao-{total}km" if pace_km else f"longao-{total}km-leve"
+    return RunSession(f"Longao{total}k", slug, (easy(z2_km, "Longao Z2"), *finish, cooldown(5)))
+
+
+def leve_session(km: int) -> RunSession:
+    return RunSession(f"Leve{km}k", f"leve-{km}km", (easy(km),))
+
+
+def trote_session(km: int) -> RunSession:
+    return RunSession(f"Trote{km}k", f"trote-{km}km", (jog(km),))
 
 GOBLET = ("Agachamento goblet", "Agach. goblet", 28, 37)
 REVERSE_LUNGE = ("Afundo reverso", "Afundo reverso", 17, 82)
@@ -811,35 +965,93 @@ STRENGTH_SESSIONS: dict[str, StrengthSession] = {
 }
 
 REST = DayPlan()
-TRAINING_WEEKS: tuple[TrainingWeek, ...] = (
-    TrainingWeek(2, (
-        REST,
-        DayPlan(run="ritmo-10"),
-        DayPlan(run="leve-8", strength="A"),
-        DayPlan(run="leve-6", strength="B"),
-        REST,
-        DayPlan(run="trote-5"),
-        DayPlan(run="longao-24"),
-    )),
-    TrainingWeek(1, (
-        REST,
-        DayPlan(run="ritmo-8"),
-        DayPlan(run="leve-7", strength="reduzida"),
-        DayPlan(run="leve-6"),
-        REST,
-        DayPlan(run="trote-4"),
-        DayPlan(run="longao-16"),
-    )),
-    TrainingWeek(0, (
-        REST,
-        DayPlan(run="ritmo-4"),
-        DayPlan(run="leve-5", strength="ativacao"),
-        DayPlan(run="leve-5"),
-        REST,
-        DayPlan(run="trote-3"),
-        DayPlan(race=True),
-    )),
+
+# Semana de 7 dias terminando no dia da prova: descanso, ritmo, leve + força,
+# leve + força, descanso, trote, longão (ou a prova). "peak_week" é a semana
+# de pico sem o longão; "taper" são as semanas a 2, 1 e 0 da prova.
+DISTANCE_PROFILES: tuple[DistanceProfile, ...] = (
+    DistanceProfile("5 km", Decimal("7.5"), "Ritmo 5 km", 6, 10, 1, Decimal("0.2"),
+                    WeekVolume(4, 6, 5, 3),
+                    (WeekVolume(4, 5, 5, 3, 6, 2), WeekVolume(3, 5, 4, 3, 5, 2), WeekVolume(2, 4, 3, 2))),
+    DistanceProfile("10 km", Decimal("15"), "Ritmo 10 km", 8, 14, 1, Decimal("0.2"),
+                    WeekVolume(6, 7, 5, 4),
+                    (WeekVolume(6, 6, 5, 4, 9, 3), WeekVolume(5, 5, 5, 3, 7, 3), WeekVolume(3, 4, 4, 3))),
+    DistanceProfile("Meia maratona", Decimal("30"), "Ritmo meia", 10, 20, 2, Decimal("0.3"),
+                    WeekVolume(8, 8, 6, 5),
+                    (WeekVolume(8, 7, 6, 4, 10, 6), WeekVolume(6, 6, 5, 4, 8, 4), WeekVolume(3, 5, 4, 3))),
+    DistanceProfile("Maratona", Decimal("100"), "Ritmo maratona", 14, 32, 2, Decimal("0.25"),
+                    WeekVolume(12, 10, 8, 6),
+                    (WeekVolume(10, 8, 6, 5, 16, 8), WeekVolume(8, 7, 6, 4, 10, 6), WeekVolume(4, 5, 5, 3))),
 )
+PLAN_MAX_WEEKS = 16
+TAPER_WEEKS = 3
+CUTBACK_EVERY = 4
+CUTBACK_FACTOR = Decimal("0.75")
+LONG_PACE_FROM_WEEK = 8
+MIN_LONG_KM = 4
+TAPER_STRENGTH = (("A", "B"), ("reduzida", None), ("ativacao", None))
+
+
+def profile_for(distance_km: Decimal) -> DistanceProfile:
+    return next((p for p in DISTANCE_PROFILES if distance_km <= p.max_km), DISTANCE_PROFILES[-1])
+
+
+def km_round(value: Decimal) -> int:
+    return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def scale_km(km: int, factor: Decimal, floor: int) -> int:
+    return max(floor, km_round(Decimal(km) * factor)) if km else 0
+
+
+def week_days(volume: WeekVolume, label: str, strength: tuple[str | None, str | None],
+              long_run: RunSession | None) -> tuple[DayPlan, ...]:
+    first, second = strength
+    return (
+        REST,
+        DayPlan(run=ritmo_session(volume.quality, label)),
+        DayPlan(run=leve_session(volume.easy), strength=first),
+        DayPlan(run=leve_session(volume.easy_short), strength=second),
+        REST,
+        DayPlan(run=trote_session(volume.jog)),
+        DayPlan(run=long_run) if long_run else DayPlan(race=True),
+    )
+
+
+def build_training_weeks(profile: DistanceProfile, count: int, current_long: Decimal | None) -> list[TrainingWeek]:
+    label = profile.pace_label
+    peak = Decimal(profile.peak_long)
+    start = current_long if current_long is not None else Decimal(profile.start_long)
+    reached = start if current_long is not None else peak
+    build_count = max(0, count - TAPER_WEEKS)
+    weeks: list[TrainingWeek] = []
+    for index in range(build_count):
+        before = count - 1 - index
+        progress = start + (peak - start) * (index + 1) / build_count
+        reached = min(peak, start + profile.long_step * (index + 1), progress)
+        cutback = build_count >= CUTBACK_EVERY and before % CUTBACK_EVERY == 2
+        long_km = max(MIN_LONG_KM, km_round(reached * CUTBACK_FACTOR if cutback else reached))
+        pace_km = km_round(long_km * profile.long_pace_share) if not cutback and before <= LONG_PACE_FROM_WEEK else 0
+        factor = Decimal(long_km) / peak
+        top = profile.peak_week
+        volume = WeekVolume(scale_km(top.quality, factor, 2), scale_km(top.easy, factor, 3),
+                            scale_km(top.easy_short, factor, 3), scale_km(top.jog, factor, 2))
+        phase = "Recuperação" if cutback else "Pico" if before == TAPER_WEEKS else "Construção"
+        weeks.append(TrainingWeek(before, phase, week_days(volume, label, ("A", "B"),
+                                                           longao_session(long_km - pace_km, pace_km, label))))
+
+    ratio = min(Decimal(1), reached / peak)
+    for before in range(min(count, TAPER_WEEKS) - 1, -1, -1):
+        base = profile.taper[TAPER_WEEKS - 1 - before]
+        volume = WeekVolume(scale_km(base.quality, ratio, 2), scale_km(base.easy, ratio, 3),
+                            scale_km(base.easy_short, ratio, 3), scale_km(base.jog, ratio, 2))
+        long_run = None
+        if before:
+            long_run = longao_session(scale_km(base.long_z2, ratio, 2), scale_km(base.long_pace, ratio, 1), label)
+        phase = "Prova" if before == 0 else "Polimento"
+        weeks.append(TrainingWeek(before, phase, week_days(volume, label, TAPER_STRENGTH[TAPER_WEEKS - 1 - before],
+                                                           long_run)))
+    return weeks
 
 
 def fit_crc(data: bytes, crc: int = 0) -> int:
@@ -929,11 +1141,11 @@ def workout_label(day: date, title: str) -> str:
     return f"{day.day:02d}{MONTHS[day.month - 1]} {title}"[: FIT_NAME_SIZE - 1]
 
 
-def week_folder(number: int, monday: date, race_week: bool) -> str:
-    sunday = monday + timedelta(days=6)
+def week_folder(number: int, start: date, race_week: bool) -> str:
+    end = start + timedelta(days=6)
     name = (
-        f"semana-{number}_{monday.day:02d}-{MONTHS[monday.month - 1]}"
-        f"-a-{sunday.day:02d}-{MONTHS[sunday.month - 1]}"
+        f"semana-{number}_{start.day:02d}-{MONTHS[start.month - 1]}"
+        f"-a-{end.day:02d}-{MONTHS[end.month - 1]}"
     )
     return name + ("-prova" if race_week else "")
 
@@ -949,7 +1161,12 @@ class MarathonPlan:
         split_km: Decimal,
         zone: PaceZone,
         splits: list[Split],
+        current_long_km: Decimal | None = None,
+        plan_start: date | None = None,
     ) -> None:
+        self.profile = profile_for(distance_km)
+        self.current_long_km = current_long_km
+        self.plan_start = plan_start or date.today()
         self.watch = watch
         self.event_name = event_name
         self.event_city = event_city
@@ -972,6 +1189,10 @@ class MarathonPlan:
         split_km = parse_distance(config.split_km, "O intervalo de parcial")
         tolerance = parse_tolerance(config.tolerance_seconds, pace_seconds)
         race_day = parse_race_date(config.race_date)
+        long_text = str(config.current_long_km or "").strip()
+        current_long = parse_distance(long_text, "O maior longão recente") if long_text else None
+        start_text = str(config.plan_start or "").strip()
+        plan_start = parse_race_date(start_text) if start_text else None
         zone = PaceZone(
             tolerance_seconds=tolerance,
             faster_seconds=pace_seconds - tolerance,
@@ -987,6 +1208,8 @@ class MarathonPlan:
             split_km=split_km,
             zone=zone,
             splits=build_splits(distance_km, pace_seconds, split_km),
+            current_long_km=current_long,
+            plan_start=plan_start,
         )
 
     def finish_seconds(self, pace_seconds: int | None = None) -> int:
@@ -1018,6 +1241,12 @@ class MarathonPlan:
                 "setup_steps": list(self.watch.setup_steps),
                 "screen_recommendations": self._screen_lines(),
                 "model_notes": list(self.watch.model_notes),
+                "paths": {
+                    "run_workout": self.watch.run_workout_path,
+                    "strength_workout": self.watch.strength_workout_path,
+                    "pacepro": self.watch.pacepro_path,
+                    "course": self.watch.course_path,
+                },
             },
             "target": {
                 "distance_km": json_number(self.distance_km),
@@ -1053,6 +1282,10 @@ class MarathonPlan:
             "training": {
                 "root": DEFAULT_TRAININGS_DIR.name,
                 "files_ready": self.training_files_ready(),
+                "profile": self.profile.name,
+                "plan_start": self.plan_start.isoformat(),
+                "current_long_km": json_number(self.current_long_km) if self.current_long_km is not None else None,
+                "peak_long_km": self.profile.peak_long,
                 "weeks": self.training_calendar(),
             },
         }
@@ -1173,7 +1406,7 @@ class MarathonPlan:
         session = RunSession(
             self.fit_workout_name(block_km),
             "ritmo",
-            (warmup(WARMUP_SECONDS // 60), pace_block(block_km), cooldown(COOLDOWN_SECONDS // 60)),
+            (warmup(WARMUP_SECONDS // 60), pace_block(block_km, self.profile.pace_label), cooldown(COOLDOWN_SECONDS // 60)),
         )
         serial = int(datetime.now(timezone.utc).timestamp())
         payload = encode_fit_workout(session.title, FIT_SPORT_RUNNING, FIT_SUB_SPORT_GENERIC,
@@ -1183,22 +1416,29 @@ class MarathonPlan:
         destination.write_bytes(payload)
         return destination
 
+    def plan_week_count(self) -> int:
+        first_day = self.plan_start + timedelta(days=1)
+        if first_day > self.race_day:
+            return TAPER_WEEKS
+        return min(PLAN_MAX_WEEKS, (self.race_day - first_day).days // 7 + 1)
+
+    def training_weeks(self) -> list[TrainingWeek]:
+        return build_training_weeks(self.profile, self.plan_week_count(), self.current_long_km)
+
     def training_calendar(self) -> list[dict[str, object]]:
-        if self.race_day.weekday() != 6:
-            return []
-        race_monday = self.race_day - timedelta(days=6)
+        race_week_start = self.race_day - timedelta(days=6)
         weeks: list[dict[str, object]] = []
-        for number, week in enumerate(TRAINING_WEEKS, start=1):
-            monday = race_monday - timedelta(weeks=week.weeks_before_race)
-            folder = week_folder(number, monday, week.weeks_before_race == 0)
+        for number, week in enumerate(self.training_weeks(), start=1):
+            start = race_week_start - timedelta(weeks=week.weeks_before_race)
+            folder = week_folder(number, start, week.weeks_before_race == 0)
             planned_km = Decimal("0")
             days: list[dict[str, object]] = []
             for index, plan_day in enumerate(week.days):
-                day = monday + timedelta(days=index)
-                day_folder = f"{folder}/{index + 1}-{DAY_SLUGS[index]}"
+                day = start + timedelta(days=index)
+                day_folder = f"{folder}/{index + 1}-{DAY_SLUGS[day.weekday()]}"
                 entry: dict[str, object] = {
                     "date": day.isoformat(),
-                    "weekday": DAY_NAMES[index],
+                    "weekday": DAY_NAMES[day.weekday()],
                     "folder": day_folder,
                     "race": plan_day.race,
                     "rest": not (plan_day.run or plan_day.strength or plan_day.race),
@@ -1206,12 +1446,12 @@ class MarathonPlan:
                     "strength": None,
                 }
                 if plan_day.run:
-                    session = RUN_SESSIONS[plan_day.run]
+                    session = plan_day.run
                     km = sum((s.amount for s in session.segments if s.unit == "km"), Decimal("0"))
                     pace_km = sum((s.amount for s in session.segments if s.target == "pace"), Decimal("0"))
                     planned_km += km
                     entry["run"] = {
-                        "key": plan_day.run,
+                        "key": session.slug,
                         "name": workout_label(day, session.title),
                         "description": self.describe_run(session),
                         "distance_km": json_number(km),
@@ -1246,8 +1486,9 @@ class MarathonPlan:
             weeks.append({
                 "number": number,
                 "folder": folder,
-                "start": monday.isoformat(),
-                "end": (monday + timedelta(days=6)).isoformat(),
+                "start": start.isoformat(),
+                "end": (start + timedelta(days=6)).isoformat(),
+                "phase": week.phase,
                 "race_week": week.weeks_before_race == 0,
                 "planned_km": json_number(planned_km),
                 "days": days,
@@ -1256,23 +1497,22 @@ class MarathonPlan:
 
     def export_training_tree(self, root: Path) -> tuple[Path, int]:
         weeks = self.training_calendar()
-        if not weeks:
-            raise ValueError("A pasta de treinos segue semanas de segunda a domingo e supõe prova no domingo.")
         root = root.expanduser().resolve()
         serial = int(datetime.now(timezone.utc).timestamp())
         fit_count = 0
         sections: list[str] = []
 
-        for week in weeks:
+        for week, plan_week in zip(weeks, self.training_weeks(), strict=True):
             rows = [
-                f"### Semana {week['number']} — {format_date(date.fromisoformat(str(week['start'])))} "
+                f"### Semana {week['number']} ({week['phase']}) — "
+                f"{format_date(date.fromisoformat(str(week['start'])))} "
                 f"a {format_date(date.fromisoformat(str(week['end'])))}",
                 f"Pasta: `{week['folder']}`",
                 "",
                 "| Dia | Corrida | Força |",
                 "| --- | --- | --- |",
             ]
-            for entry in week["days"]:
+            for entry, plan_day in zip(week["days"], plan_week.days, strict=True):
                 day = date.fromisoformat(str(entry["date"]))
                 day_dir = root / str(entry["folder"])
                 day_dir.mkdir(parents=True, exist_ok=True)
@@ -1287,7 +1527,7 @@ class MarathonPlan:
                     serial += 1
                     target.write_bytes(encode_fit_workout(
                         run["name"], FIT_SPORT_RUNNING, FIT_SUB_SPORT_GENERIC,
-                        self.run_steps(RUN_SESSIONS[run["key"]]), serial,
+                        self.run_steps(plan_day.run), serial,
                     ))
                     fit_count += 1
                     run_text = f"`{run['name']}`: {run['description']}"
@@ -1329,7 +1569,7 @@ class MarathonPlan:
             "Sem arquivo .fit neste dia. A prova usa o PacePro, criado no Garmin Connect:\n\n"
             "1. Garmin Connect → Treinamento e Planejamento → Estratégias de Pace PacePro.\n"
             f"2. Distância {format_km(self.distance_km)}, pace {zone.target_pace}, estratégia constante. Enviar ao relógio.\n"
-            "3. No relógio: START → Corrida → segure UP → Treino → Planos PacePro → Aceitar plano → START.\n\n"
+            f"3. No relógio ({self.watch.model}): {self.watch.pacepro_path}.\n\n"
             f"Faixa: {zone.faster_pace} a {zone.slower_pace} min/km. "
             f"Tempo alvo: {format_duration(self.finish_seconds())}. Auto Lap de 1 km.\n\n"
             "| Marca | Acumulado |\n| --- | --- |\n"
@@ -1355,8 +1595,8 @@ class MarathonPlan:
             "3. Copie para `NewFiles` os `.fit` das pastas `treino-corrida` e `treino-forca` **da semana atual**. "
             "Só os arquivos, sem as pastas.\n"
             "4. Desconecte o cabo. O relógio move os arquivos para os treinos. Se algum não aparecer, reinicie o relógio.\n"
-            "5. Corrida: START → Corrida → UP → Treino → Treinos → treino do dia. "
-            "Força: START → Força → Treinos → treino do dia.\n\n"
+            f"5. Corrida: {self.watch.run_workout_path}. "
+            f"Força: {self.watch.strength_workout_path}.\n\n"
             "Copie uma semana por vez. No domingo, apague os treinos da semana que passou "
             "(no relógio: Treinos → treino → Excluir) para não lotar a memória. "
             "O nome de cada treino começa pela data, por exemplo `13out Ritmo10k`, porque o relógio "
@@ -1364,9 +1604,14 @@ class MarathonPlan:
             "Treinos copiados pelo cabo ficam só no relógio. Não aparecem no aplicativo nem no calendário "
             "do Garmin Connect.\n\n"
             "## Ajuste de volume\n\n"
-            "Estas três semanas são a redução final antes da prova. Se o seu longão mais longo nas últimas "
-            "quatro semanas foi menor que 20 km, faça o longão da semana 1 nessa distância, não em 24 km. "
-            "Manhã com HRV baixo, Body Battery até 25 ou sono abaixo de 60 transforma o treino de ritmo em "
+            f"Perfil {self.profile.name}: longão de pico de {self.profile.peak_long} km a três semanas da prova, "
+            "semana de recuperação a cada quatro e as três últimas semanas de redução. "
+            + (
+                f"O longão parte do maior longão recente informado ({format_km(self.current_long_km)}). "
+                if self.current_long_km is not None
+                else "Informe o maior longão recente (`--longao`) para o plano partir do seu volume. "
+            )
+            + "Manhã com HRV baixo, Body Battery até 25 ou sono abaixo de 60 transforma o treino de ritmo em "
             "leve (regra da seção B do manual). Dor que muda a passada encerra o treino do dia.\n\n"
             "Trechos \"Leve Z2\" usam as zonas de frequência cardíaca do relógio. O relógio avisa quando a FC "
             "passa da zona 2.\n\n"
@@ -1389,6 +1634,7 @@ def read_config_file(path: Path) -> dict[str, object]:
         watch = raw["watch"]
         target = raw["target"]
         event = raw.get("event") if isinstance(raw.get("event"), dict) else {}
+        training = raw.get("training") if isinstance(raw.get("training"), dict) else {}
         if not isinstance(watch, dict) or not isinstance(target, dict):
             raise ValueError("O JSON exportado precisa ter os objetos watch e target.")
         return {
@@ -1400,6 +1646,8 @@ def read_config_file(path: Path) -> dict[str, object]:
             "split_km": target.get("split_km", DEFAULTS["split_km"]),
             "event_name": event.get("name", DEFAULTS["event_name"]),
             "event_city": event.get("city", DEFAULTS["event_city"]),
+            "current_long_km": training.get("current_long_km") or "",
+            "plan_start": training.get("plan_start") or "",
         }
     unknown = sorted(set(raw) - ALLOWED_KEYS)
     if unknown:
@@ -1430,6 +1678,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--split-km", dest="split_km", help="Intervalo das parciais em km. Padrão: 5.")
     parser.add_argument("--event", dest="event_name", help="Nome da prova.")
     parser.add_argument("--city", dest="event_city", help="Cidade da prova.")
+    parser.add_argument("--longao", dest="current_long_km",
+                        help="Maior longão recente em km. O plano progride a partir dele.")
+    parser.add_argument("--inicio", dest="plan_start",
+                        help="Data de início do plano AAAA-MM-DD. Padrão: hoje. Até 16 semanas antes da prova.")
     parser.add_argument("--config", type=Path, help="JSON de entrada, plano ou exportado.")
     parser.add_argument("--output", type=Path, help="Caminho do JSON de saída.")
     parser.add_argument(
@@ -1474,6 +1726,8 @@ def load_config(argv: list[str] | None = None) -> AppConfig:
         "split_km": args.split_km,
         "event_name": args.event_name,
         "event_city": args.event_city,
+        "current_long_km": args.current_long_km,
+        "plan_start": args.plan_start,
     }
     for key, value in cli_values.items():
         if value is not None:
@@ -1494,6 +1748,8 @@ def load_config(argv: list[str] | None = None) -> AppConfig:
         trainings_dir=args.treinos,
         finish_time=args.finish_time,
         json_only=args.json_only,
+        current_long_km=data["current_long_km"],
+        plan_start=str(data["plan_start"] or ""),
     )
 
 

@@ -52,7 +52,7 @@ Para agendar, coloque o treino no calendário do Connect no dia certo. No sincro
 
 A tela **Importar dados** do Garmin Connect aceita só atividades já corridas (.fit, .tcx, .gpx). Arquivo de treino é recusado com "Um de seus arquivos não foi aceito pelo sistema". O treino em arquivo entra direto no relógio.
 
-Para as semanas até a prova, `python garmin_marathon_planner.py --treinos` gera a pasta `Treinos/`, organizada em `semana-N/dia/treino-corrida` e `treino-forca`, com um `.fit` por sessão. O `Treinos/README.md` traz o quadro da semana e o passo a passo de cópia. Copie uma semana por vez.
+Para as semanas até a prova (até 16, a partir de hoje ou de `--inicio`; com `--longao` o longão parte do seu volume atual), `python garmin_marathon_planner.py --treinos` gera a pasta `Treinos/`, organizada em `semana-N/dia/treino-corrida` e `treino-forca`, com um `.fit` por sessão. O `Treinos/README.md` traz o quadro da semana e o passo a passo de cópia. Copie uma semana por vez.
 
 Um treino avulso de ritmo:
 
@@ -124,7 +124,7 @@ Tela de prova no 165:
 
 Na 265, a prontidão de treino passa a existir e entra na decisão da manhã junto com o HRV. Na 965, mapa, ClimbPro e Stamina existem. Em Recife, cidade e percurso predominantemente planos, esses três ficam fora da primeira tela. O que segura o 6:40 é ritmo, volta e frequência cardíaca.
 
-#### Linha Venu e Vívoactive (Venu 3, Vívoactive 5)
+#### Linha Venu e Vívoactive (Venu 3, Venu 4, Venu X1, Vívoactive 5, Vívoactive 6)
 
 A Venu é um relógio de saúde com tela AMOLED e operação por toque. A Venu 3 tem três botões, com papéis diferentes dos cinco da Forerunner:
 
@@ -146,6 +146,8 @@ Partida de um treino na Venu 3:
 A Venu 3 traz HRV Status, Body Battery, sono, Sleep Coach e Training Status. ClimbPro, Stamina de endurance e mapa topográfico de trilha são recursos de Fenix, Epix e Forerunner 965. A decisão do longão na Venu 3 é HRV, sono, Body Battery e a perna. Não procure uma tela de Stamina.
 
 A Vívoactive 5 é ainda mais centrada no toque e na bateria do dia a dia. O treino estruturado enviado pelo Connect funciona. A tela de prova é a mesma regra: um quadro com ritmo, distância, frequência cardíaca e cronômetro, Auto Lap de 1 km, alerta 6:30–6:50. Sono e Body Battery guiam a manhã. Confira no seu aparelho se o HRV Status está instalado antes de depender dele.
+
+A Vívoactive 6 tem dois botões (START em cima, BACK embaixo) e toque. Tem HRV Status, Body Battery, PacePro e segue percurso, mas não tem Training Readiness nem Training Status: a decisão do longão usa a tabela de HRV e Body Battery da seção B. O BACK só marca volta se a Tecla de volta estiver ligada (configurações da Corrida → Voltas), então a prova fica no Auto Lap de 1 km. Treino: START → Atividades → Corrida → Treino → Biblioteca de treinos → Fazer treino. PacePro: START → Corrida → deslize para cima → Treino → Planos PacePro → Usar plano. Bateria declarada: até 21 h em GPS apenas. A Venu 4 e a Venu X1 acrescentam Training Readiness e Training Status; a X1 também traz mapa embarcado. Os caminhos e a ficha de cada modelo aparecem na aba Relógio do aplicativo.
 
 Ensaie uma vez, num longão, com o braço molhado: pausar, retomar e ler o ritmo sem secar a tela.
 
@@ -392,7 +394,7 @@ python garmin_marathon_planner.py --config meu_alvo.json
 python garmin_marathon_planner.py --time 4:30:00
 ```
 
-`--time` recebe o tempo final (H:MM:SS) e calcula o pace, no lugar de `--pace`. `--json-only` imprime o plano em JSON no terminal sem regravar o arquivo; é o modo que a página web usa.
+`--time` recebe o tempo final (H:MM:SS) e calcula o pace, no lugar de `--pace`. `--longao 14` informa o maior longão das últimas quatro semanas e `--inicio 2026-12-06` fixa o começo do plano; o calendário escolhe o perfil pela distância (5 km, 10 km, meia ou maratona) e aceita prova em qualquer dia da semana. `--json-only` imprime o plano em JSON no terminal sem regravar o arquivo; é o modo que a página web usa.
 
 Um JSON de entrada, com chaves planas, aceita `model`, `distance_km`, `pace`, `race_date`, `tolerance_seconds`, `split_km`, `event_name` e `event_city`. O JSON exportado também pode ser recarregado. Argumentos da linha de comando ganham do arquivo.
 
@@ -405,8 +407,8 @@ A página é estática: não precisa de PHP nem de Python instalado. Ela baixa o
 | Aba | Para quê |
 | --- | --- |
 | Hoje | Contagem para a prova, treino do dia, próximo treino e km da semana |
-| Semanas | Dia a dia de cada semana, etapas, força, "Marcar como feito", download do `.fit` do dia e da semana inteira em `.zip`, sempre com a meta atual |
-| Calculadora | Relógio, distância, pace ou tempo alvo, faixa e parciais; recalcula ao digitar |
+| Semanas | Até 16 semanas com a fase de cada uma (construção, recuperação, pico, polimento, prova), dia a dia, etapas, força, "Marcar como feito", download do `.fit` do dia e da semana inteira em `.zip`, sempre com a meta atual |
+| Calculadora | Relógio, distância, pace ou tempo alvo, faixa e parciais; nome, cidade e data da prova, início do plano e maior longão recente; recalcula ao digitar |
 | Mapa | Monta percurso clicando no mapa (segue ruas a pé), mostra km, tempo no pace e na faixa, fecha volta ou ida e volta, salva no navegador e baixa GPX |
 | Relógio | Configuração de telas e alertas do modelo escolhido |
 | Manual | Este arquivo |

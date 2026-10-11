@@ -10,4 +10,5 @@ alwaysApply: false
 - Corrigir a seção citada. Não reformatar o documento inteiro.
 - Forerunner 165: HRV Status, Body Battery, sono, VO2, recuperação, PacePro e cinco botões. Training Readiness, Training Status, mapa topográfico, ClimbPro e Stamina ficam para 265, 965 ou Fenix, conforme a seção A.
 - Venu 3: durante a atividade o Back marca a volta. A troca de tela é por toque.
+- Vívoactive 6: dois botões (START, BACK) e toque; HRV Status, Body Battery, PacePro e percurso; sem Training Readiness/Status; BACK só marca volta com a Tecla de volta ligada; até 21 h em GPS apenas.
 - Fisiologia e força ficam neste arquivo. O Python calcula pace, parciais e telas.

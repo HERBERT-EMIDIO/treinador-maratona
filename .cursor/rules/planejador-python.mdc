@@ -7,11 +7,12 @@ alwaysApply: false
 # Planejador
 
 - Biblioteca padrão. Distância e tempo com `Decimal`.
-- Novo relógio: entrada em `LINE_PROFILES` ou `MODEL_OVERRIDES`. Não criar outro script.
+- Novo relógio: entrada em `LINE_PROFILES` ou `MODEL_OVERRIDES`. Não criar outro script. Cada linha traz os caminhos de menu (`run_workout_path`, `strength_workout_path`, `pacepro_path`, `course_path`), usados no README, no PROVA.md e na página; a ficha do modelo pode sobrescrever `metrics` e `battery`. Dados de modelo só com fonte (manual ou ficha da Garmin). `normalize_model_key` aceita acento, "vivoactive6", "fr265" e "va6".
 - Padrões: Forerunner 165, 42.195 km, pace 06:40, data 2026-11-01, tolerância 10 s, parcial de 5 km.
 - CLI sobrescreve o JSON. Saída: `treino_maratona_config.json` ao lado do script, UTF-8.
 - Pace `MM:SS` por km. Console em vírgula decimal. JSON com número.
 - Auto Lap de prova permanece 1 km. A parcial de 5 km é a tabela de conferência.
-- `--fit` grava um treino avulso de ritmo. `--treinos` gera `Treinos/semana-N_.../D-dia/treino-corrida|treino-forca/AAAA-MM-DD_slug.fit` e o `README.md`. Mudar sessões em `RUN_SESSIONS`, `STRENGTH_SESSIONS` e `TRAINING_WEEKS`, não nos arquivos gerados.
+- `--fit` grava um treino avulso de ritmo. `--treinos` gera `Treinos/semana-N_.../D-dia/treino-corrida|treino-forca/AAAA-MM-DD_slug.fit` e o `README.md`. Mudar volume em `DISTANCE_PROFILES` (5 km, 10 km, meia, maratona), formato das corridas em `ritmo_session`/`longao_session`/`leve_session`/`trote_session`, força em `STRENGTH_SESSIONS`, progressão em `build_training_weeks`; nunca nos arquivos gerados.
+- Plano: até `PLAN_MAX_WEEKS` (16) semanas de 7 dias terminando no dia da prova (qualquer dia da semana), a partir de `--inicio` (padrão hoje). Construção com longão subindo de `--longao` até o pico a 3 semanas da prova, recuperação a cada 4, polimento proporcional ao longão alcançado. Sem `--longao` e com 3 semanas ou menos, o polimento é o modelo cheio do perfil.
 - FIT de treino com CRC próprio, sem SDK. Nome no relógio: `DDmes Titulo`, até 15 caracteres e único. Vai por USB para `GARMIN/NewFiles`. A tela Importar dados do Connect recusa treino.
 - Depois de mudar fórmula de split ou zona, rodar o script e conferir 42,195 km a 06:40 = 04:41:18.

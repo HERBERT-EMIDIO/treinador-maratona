@@ -1,7 +1,7 @@
 {
   "meta": {
-    "planner_version": "1.1.0",
-    "generated_at": "2026-10-11T11:30:32-03:00",
+    "planner_version": "1.2.0",
+    "generated_at": "2026-10-11T17:27:36-03:00",
     "manual": "PLANO_MARATONA_GARMIN.md"
   },
   "event": {
@@ -39,7 +39,13 @@
       "Training Readiness e Training Status não fazem parte do Forerunner 165.",
       "No dia da prova, use PacePro com pace constante. Não há ClimbPro, Stamina nem mapa topográfico embarcado.",
       "Versão Music: deixe a música desligada para ficar na autonomia de GPS apenas."
-    ]
+    ],
+    "paths": {
+      "run_workout": "START → Corrida → UP → Treino → Treinos → treino do dia",
+      "strength_workout": "START → Força → Treinos → treino do dia",
+      "pacepro": "START → Corrida → segure UP → Treino → Planos PacePro → Aceitar plano → START",
+      "course": "START → Corrida → segure UP → Navegação → Percursos → Fazer percurso"
+    }
   },
   "target": {
     "distance_km": 42.195,
@@ -147,22 +153,34 @@
     "Epix",
     "Fenix 7",
     "Forerunner 165",
+    "Forerunner 255",
     "Forerunner 265",
+    "Forerunner 55",
+    "Forerunner 570",
     "Forerunner 965",
+    "Forerunner 970",
     "Instinct 2",
     "Instinct 3",
     "Venu 3",
-    "Vivoactive 5"
+    "Venu 4",
+    "Venu X1",
+    "Vivoactive 5",
+    "Vivoactive 6"
   ],
   "training": {
     "root": "Treinos",
     "files_ready": true,
+    "profile": "Maratona",
+    "plan_start": "2026-10-11",
+    "current_long_km": null,
+    "peak_long_km": 32,
     "weeks": [
       {
         "number": 1,
         "folder": "semana-1_12-out-a-18-out",
         "start": "2026-10-12",
         "end": "2026-10-18",
+        "phase": "Polimento",
         "race_week": false,
         "planned_km": 53,
         "days": [
@@ -182,7 +200,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "ritmo-10",
+              "key": "ritmo-10km",
               "name": "13out Ritmo10k",
               "description": "15 min de aquecimento + 10 km em 06:30–06:50 min/km + 10 min de desaquecimento",
               "distance_km": 10,
@@ -219,7 +237,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "leve-8",
+              "key": "leve-8km",
               "name": "14out Leve8k",
               "description": "8 km leve, FC na zona 2",
               "distance_km": 8,
@@ -299,7 +317,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "leve-6",
+              "key": "leve-6km",
               "name": "15out Leve6k",
               "description": "6 km leve, FC na zona 2",
               "distance_km": 6,
@@ -388,7 +406,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "trote-5",
+              "key": "trote-5km",
               "name": "17out Trote5k",
               "description": "5 km de trote livre",
               "distance_km": 5,
@@ -413,7 +431,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "longao-24",
+              "key": "longao-24km",
               "name": "18out Longao24k",
               "description": "16 km leve, FC na zona 2 + 8 km em 06:30–06:50 min/km + 5 min de desaquecimento",
               "distance_km": 24,
@@ -450,6 +468,7 @@
         "folder": "semana-2_19-out-a-25-out",
         "start": "2026-10-19",
         "end": "2026-10-25",
+        "phase": "Polimento",
         "race_week": false,
         "planned_km": 41,
         "days": [
@@ -469,7 +488,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "ritmo-8",
+              "key": "ritmo-8km",
               "name": "20out Ritmo8k",
               "description": "15 min de aquecimento + 8 km em 06:30–06:50 min/km + 10 min de desaquecimento",
               "distance_km": 8,
@@ -506,7 +525,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "leve-7",
+              "key": "leve-7km",
               "name": "21out Leve7k",
               "description": "7 km leve, FC na zona 2",
               "distance_km": 7,
@@ -586,7 +605,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "leve-6",
+              "key": "leve-6km",
               "name": "22out Leve6k",
               "description": "6 km leve, FC na zona 2",
               "distance_km": 6,
@@ -620,7 +639,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "trote-4",
+              "key": "trote-4km",
               "name": "24out Trote4k",
               "description": "4 km de trote livre",
               "distance_km": 4,
@@ -645,7 +664,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "longao-16",
+              "key": "longao-16km",
               "name": "25out Longao16k",
               "description": "10 km leve, FC na zona 2 + 6 km em 06:30–06:50 min/km + 5 min de desaquecimento",
               "distance_km": 16,
@@ -682,6 +701,7 @@
         "folder": "semana-3_26-out-a-01-nov-prova",
         "start": "2026-10-26",
         "end": "2026-11-01",
+        "phase": "Prova",
         "race_week": true,
         "planned_km": 17,
         "days": [
@@ -701,7 +721,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "ritmo-4",
+              "key": "ritmo-4km",
               "name": "27out Ritmo4k",
               "description": "10 min de aquecimento + 4 km em 06:30–06:50 min/km + 10 min de desaquecimento",
               "distance_km": 4,
@@ -738,7 +758,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "leve-5",
+              "key": "leve-5km",
               "name": "28out Leve5k",
               "description": "5 km leve, FC na zona 2",
               "distance_km": 5,
@@ -786,7 +806,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "leve-5",
+              "key": "leve-5km",
               "name": "29out Leve5k",
               "description": "5 km leve, FC na zona 2",
               "distance_km": 5,
@@ -820,7 +840,7 @@
             "race": false,
             "rest": false,
             "run": {
-              "key": "trote-3",
+              "key": "trote-3km",
               "name": "31out Trote3k",
               "description": "3 km de trote livre",
               "distance_km": 3,
