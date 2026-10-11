@@ -40,6 +40,10 @@ const DEFAULT_SETTINGS = {
     longao: '',
 };
 const RECIFE = [-8.0631, -34.8711];
+const AI_MODEL = 'gemini-flash-latest';
+const AI_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const AI_HISTORY = 20;
+const CHAT_KEEP = 60;
 
 const store = {
     get(key, fallback) {
@@ -61,6 +65,9 @@ const state = {
     engineReady: false,
     settings: { ...DEFAULT_SETTINGS, ...store.get('tm_settings', {}) },
     done: store.get('tm_done', {}),
+    ai: { key: '', model: AI_MODEL, ...store.get('tm_ai', {}) },
+    chat: store.get('tm_chat', []),
+    asking: false,
     requestId: 0,
     week: null,
     manualLoaded: false,
@@ -254,13 +261,15 @@ async function loadPlan() {
         $('#calc-error').textContent = '';
         banner('');
         renderAll();
+        return true;
     } catch (error) {
-        if (id !== state.requestId) return;
+        if (id !== state.requestId) return undefined;
         $('#calc-error').textContent = error.message;
         if (!state.engineReady) {
             state.engine = null;
             banner(`Não consegui carregar o motor de cálculo: ${error.message}`);
         }
+        return false;
     } finally {
         if (id === state.requestId) $('#busy').classList.remove('on');
     }
@@ -281,6 +290,7 @@ function showTab(name) {
     if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
     if (tab === 'mapa') initMap();
     if (tab === 'manual') loadManual();
+    if (tab === 'treinador') renderChat();
 }
 
 /* ---------- render ---------- */
@@ -572,6 +582,277 @@ function renderWatch() {
         </div>`;
     const course = $('#course-path');
     if (course && w.paths) course.textContent = w.paths.course;
+}
+
+/* ---------- treinador IA ---------- */
+
+const COACH_FIELDS = {
+    model: ['Relógio', 'Modelo Garmin, ex.: Forerunner 265, Vivoactive 6'],
+    distance: ['Distância (km)', 'Distância da prova em km com ponto decimal: 5, 10, 21.0975, 42.195 ou outra'],
+    date: ['Data da prova', 'AAAA-MM-DD'],
+    mode: ['Meta por', 'pace ou time: qual campo define a meta'],
+    pace: ['Pace', 'mm:ss por km, usado com mode pace'],
+    time: ['Tempo alvo', 'h:mm:ss, usado com mode time'],
+    event: ['Prova', 'Nome da prova'],
+    city: ['Cidade', 'Cidade da prova'],
+    start: ['Início do plano', 'AAAA-MM-DD, normalmente hoje'],
+    longao: ['Longão atual (km)', 'Maior longão das últimas 4 semanas em km; vazio usa o padrão da distância'],
+};
+
+const COACH_SCHEMA = {
+    type: 'object',
+    properties: {
+        reply: { type: 'string', description: 'Resposta ao corredor em português do Brasil, texto simples, listas com "- ".' },
+        settings: {
+            type: 'object',
+            description: 'Só os campos da meta que devem mudar. Omita quando nada muda ou faltam dados.',
+            properties: Object.fromEntries(Object.entries(COACH_FIELDS).map(([key, [, description]]) => (
+                [key, key === 'mode' ? { type: 'string', enum: ['pace', 'time'] } : { type: 'string', description }]
+            ))),
+        },
+    },
+    required: ['reply'],
+};
+
+const COACH_RULES = `Você é o treinador de corrida do app Treinador Maratona, para corredores amadores. Fale em português do Brasil, com frases curtas, tom de treinador experiente e prático.
+
+Como o app funciona:
+- O motor do app monta o plano (até 16 semanas terminando no dia da prova; fases Construção, Recuperação, Pico, Polimento), calcula pace, faixa, parciais e gera os treinos .fit. Você não calcula: nunca invente pace, tempo final, parciais ou quilometragem; cite só números do resumo abaixo.
+- Você muda o plano propondo campos em "settings". O corredor confirma num botão e o motor recalcula. Proponha só com os dados necessários; antes disso pergunte, no máximo duas perguntas por vez.
+- Para montar um plano: distância e data da prova, meta (pace ou tempo) e o maior longão das últimas 4 semanas. Relógio, nome da prova e cidade são opcionais. Ao montar um plano novo, proponha start com a data de hoje.
+- Sem meta definida, sugira um pace realista a partir de uma prova recente ou do pace confortável, deixando claro que é estimativa.
+- O motor não muda os dias da semana nem o número de treinos. Se pedirem, explique como trocar dias mantendo o longão e um dia leve ou de descanso depois de treino forte.
+- Treinos no relógio: aba Semanas, "Baixar .fit" ou "Baixar semana (.zip)", copiar pelo cabo para GARMIN/NewFiles. Percursos: aba Mapa, desenhar, "Baixar GPX", Garmin Connect → Percursos → Importar.
+
+Segurança: você não é médico. Dor aguda, dor no peito, tontura, falta de ar fora do normal ou suspeita de lesão: oriente parar e procurar um médico. Não aumente volume além do plano.`;
+
+function coachPrompt() {
+    const s = state.settings;
+    const lines = [COACH_RULES, '', `Hoje: ${todayISO()}.`,
+        `Meta atual: ${JSON.stringify(Object.fromEntries(Object.keys(COACH_FIELDS).map((key) => [key, s[key]])))}`];
+    const plan = state.plan;
+    if (plan) {
+        const { target, pace_zone: zone, event, watch, training } = plan;
+        lines.push(
+            `Resultado do motor: ${target.distance_km} km, pace ${target.pace}/km, tempo ${target.finish_time}, faixa ${zone.faster_pace} a ${zone.slower_pace}.`,
+            `Prova: ${event.name}, ${event.city}, ${event.date}. Relógio: ${watch.model} (linha ${watch.line}). Perfil ${training.profile}, longão de pico ${training.peak_long_km} km.`,
+            `Caminhos no relógio: corrida ${watch.paths?.run_workout}; força ${watch.paths?.strength_workout}; PacePro ${watch.paths?.pacepro}.`,
+            'Plano (marcado [feito] o que o corredor concluiu):',
+        );
+        weeks().forEach((w) => {
+            lines.push(`Semana ${w.number}, ${w.start} a ${w.end}, ${w.phase}, ${w.planned_km} km:`);
+            w.days.forEach((d) => {
+                const items = [];
+                if (d.race) items.push('PROVA');
+                if (d.run) items.push(`${d.run.name} ${d.run.distance_km} km${isDone(d, 'run') ? ' [feito]' : ''}`);
+                if (d.strength) items.push(`força ${d.strength.name}${isDone(d, 'strength') ? ' [feito]' : ''}`);
+                lines.push(`- ${d.date} ${d.weekday}: ${items.join(' + ') || 'descanso'}`);
+            });
+        });
+        if (plan.models?.length) lines.push(`Relógios com perfil próprio: ${plan.models.join(', ')}.`);
+    }
+    return lines.join('\n');
+}
+
+function saveChat() {
+    state.chat = state.chat.slice(-CHAT_KEEP);
+    store.set('tm_chat', state.chat);
+}
+
+function richText(text) {
+    const html = [];
+    let items = [];
+    const inline = (value) => esc(value).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    const flush = () => {
+        if (items.length) html.push(`<ul>${items.join('')}</ul>`);
+        items = [];
+    };
+    String(text).split('\n').forEach((line) => {
+        const item = line.match(/^\s*[-*•]\s+(.*)/);
+        if (item) {
+            items.push(`<li>${inline(item[1])}</li>`);
+            return;
+        }
+        flush();
+        if (line.trim()) html.push(`<p>${inline(line)}</p>`);
+    });
+    flush();
+    return html.join('');
+}
+
+function proposalHtml(message, index) {
+    const rows = Object.entries(message.settings).map(([key, value]) => `
+        <tr><td>${esc(COACH_FIELDS[key][0])}</td><td class="muted">${esc(message.previous?.[key] || '—')}</td><td><b>${esc(value || '—')}</b></td></tr>`).join('');
+    const status = {
+        pendente: `<div class="actions"><button class="btn primary" data-apply="${index}">Aplicar ao plano</button><button class="btn" data-ignore="${index}">Ignorar</button></div>`,
+        aplicada: '<span class="pill ok">Aplicada</span>',
+        ignorada: '<span class="pill rest">Ignorada</span>',
+        recusada: '<span class="pill rest">Recusada pelo motor</span>',
+    }[message.status] || '';
+    return `<div class="proposal"><b class="small">Proposta para a meta</b>
+        <table><thead><tr><th>Campo</th><th>Agora</th><th>Novo</th></tr></thead><tbody>${rows}</tbody></table>${status}</div>`;
+}
+
+function renderChat(waiting = state.asking) {
+    const box = $('#chat');
+    if (!box) return;
+    const intro = `Olá! Sou o seu treinador. Me conte qual prova você vai correr (distância e data), o seu maior longão nas últimas 4 semanas e o tempo que quer fazer, ou um tempo recente em 5 ou 10 km. Eu proponho a meta, você aplica e o app gera o plano e os treinos para o relógio.${state.ai.key ? '' : '\n\nAntes, cole a sua chave grátis do Gemini no painel ao lado.'}`;
+    const html = state.chat.length
+        ? state.chat.map((m, i) => `<div class="msg ${esc(m.role)}">${richText(m.text)}${m.settings ? proposalHtml(m, i) : ''}${m.goto ? `<div class="actions"><button class="btn" data-goto="${esc(m.goto)}">Abrir ${esc(m.goto === 'semanas' ? 'Semanas' : m.goto)}</button></div>` : ''}</div>`).join('')
+        : `<div class="msg model">${richText(intro)}</div>`;
+    box.innerHTML = html + (waiting ? '<div class="msg model typing">Pensando…</div>' : '');
+    box.scrollTop = box.scrollHeight;
+    $('#chat-send').disabled = waiting;
+    $$('#coach-quick .chip').forEach((chip) => { chip.disabled = waiting; });
+}
+
+function renderAiSetup() {
+    const { key, model } = state.ai;
+    $('#ai-status').textContent = key ? `Chave salva neste navegador (termina em ${key.slice(-4)}).` : 'Sem chave: o treinador precisa dela para conversar.';
+    $('#ai-key').value = '';
+    $('#ai-key').placeholder = key ? '•••••••• (salva)' : 'AIza…';
+    $('#ai-model').value = model || AI_MODEL;
+}
+
+function saveAiKey() {
+    const key = $('#ai-key').value.trim();
+    if (!key && !state.ai.key) return toast('Cole a chave antes de salvar.');
+    if (key) state.ai.key = key;
+    state.ai.model = $('#ai-model').value.trim().replace(/^models\//, '') || AI_MODEL;
+    store.set('tm_ai', state.ai);
+    renderAiSetup();
+    renderChat();
+    toast('Chave salva neste navegador.');
+}
+
+function forgetAiKey() {
+    state.ai.key = '';
+    store.set('tm_ai', state.ai);
+    renderAiSetup();
+    renderChat();
+    toast('Chave apagada deste navegador.');
+}
+
+function cleanProposal(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const proposal = {};
+    Object.keys(COACH_FIELDS).forEach((key) => {
+        if (typeof raw[key] !== 'string') return;
+        let value = raw[key].trim();
+        if (key === 'distance' || key === 'longao') value = value.replace(',', '.').replace(/\s*km$/i, '');
+        if (key === 'mode' && !['pace', 'time'].includes(value)) return;
+        if (value !== String(state.settings[key] ?? '')) proposal[key] = value;
+    });
+    if (proposal.pace && !proposal.mode && state.settings.mode !== 'pace') proposal.mode = 'pace';
+    if (proposal.time && !proposal.mode && state.settings.mode !== 'time') proposal.mode = 'time';
+    return Object.keys(proposal).length ? proposal : null;
+}
+
+function aiError(status, data) {
+    const message = data?.error?.message || '';
+    if (status === 400 && /api key/i.test(message)) return 'Chave inválida. Confira a chave em aistudio.google.com/apikey.';
+    if (status === 403) return 'A chave não tem permissão para o Gemini. Gere uma nova no AI Studio.';
+    if (status === 404) return `Modelo "${state.ai.model}" não encontrado. Em Avançado, use ${AI_MODEL}.`;
+    if (status === 429) return 'Limite grátis da chave atingido. Espere um minuto e tente de novo.';
+    if (status >= 500) return 'O Gemini está instável agora. Tente de novo em instantes.';
+    return message || `Erro ${status} no Gemini.`;
+}
+
+async function askCoach(text) {
+    const question = text.trim();
+    if (!question || state.asking) return;
+    if (!state.ai.key) {
+        toast('Cole a chave do Gemini no painel ao lado.');
+        $('#ai-key').focus();
+        return;
+    }
+    state.chat.push({ role: 'user', text: question });
+    saveChat();
+    state.asking = true;
+    renderChat();
+    try {
+        const history = state.chat.filter((m) => m.role === 'user' || m.role === 'model').slice(-AI_HISTORY);
+        while (history.length && history[0].role !== 'user') history.shift();
+        const contents = history.map((m) => ({
+            role: m.role,
+            parts: [{ text: m.settings ? `${m.text}\n[Proposta ${m.status}: ${JSON.stringify(m.settings)}]` : m.text }],
+        }));
+        const response = await fetch(`${AI_URL}/${encodeURIComponent(state.ai.model || AI_MODEL)}:generateContent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': state.ai.key },
+            body: JSON.stringify({
+                systemInstruction: { parts: [{ text: coachPrompt() }] },
+                contents,
+                generationConfig: { responseMimeType: 'application/json', responseJsonSchema: COACH_SCHEMA },
+            }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(aiError(response.status, data));
+        const raw = (data.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || '').join('');
+        if (!raw) throw new Error('O Gemini não respondeu a esta mensagem. Reformule e tente de novo.');
+        const answer = JSON.parse(raw);
+        const settings = cleanProposal(answer.settings);
+        const message = { role: 'model', text: String(answer.reply || '').trim() || 'Proposta pronta.' };
+        if (settings) {
+            Object.assign(message, {
+                settings,
+                previous: Object.fromEntries(Object.keys(settings).map((key) => [key, String(state.settings[key] ?? '')])),
+                status: 'pendente',
+            });
+        }
+        state.chat.push(message);
+    } catch (error) {
+        state.chat.push({ role: 'error', text: error instanceof SyntaxError ? 'Resposta da IA veio fora do formato. Tente de novo.' : error.message });
+    } finally {
+        state.asking = false;
+        saveChat();
+        renderChat();
+    }
+}
+
+async function applyProposal(index) {
+    const message = state.chat[index];
+    if (!message?.settings || message.status !== 'pendente') return;
+    const previous = { ...state.settings };
+    Object.assign(state.settings, message.settings);
+    store.set('tm_settings', state.settings);
+    fillForm();
+    message.status = 'aplicada';
+    saveChat();
+    renderChat();
+    const ok = await loadPlan();
+    if (ok === false) {
+        const reason = $('#calc-error').textContent;
+        state.settings = previous;
+        store.set('tm_settings', state.settings);
+        fillForm();
+        message.status = 'recusada';
+        state.chat.push({ role: 'error', text: `O motor recusou a proposta: ${reason} Peça outro ajuste ao treinador.` });
+        loadPlan();
+    } else if (ok) {
+        const { target } = state.plan;
+        state.chat.push({
+            role: 'note',
+            text: `Plano recalculado: ${weeks().length} semanas, ${fmtKm(target.distance_km, 4)} em ${target.finish_time} (pace ${target.pace}/km). Os treinos .fit estão na aba Semanas.`,
+            goto: 'semanas',
+        });
+    }
+    saveChat();
+    renderChat();
+}
+
+function ignoreProposal(index) {
+    const message = state.chat[index];
+    if (message?.status !== 'pendente') return;
+    message.status = 'ignorada';
+    saveChat();
+    renderChat();
+}
+
+function clearChat() {
+    state.chat = [];
+    saveChat();
+    renderChat();
 }
 
 /* ---------- manual ---------- */
@@ -870,7 +1151,35 @@ function bindEvents() {
         if (load) loadRoute(Number(load.dataset.load));
         const remove = e.target.closest('[data-remove]');
         if (remove) removeRoute(Number(remove.dataset.remove));
+        const ask = e.target.closest('[data-ask]');
+        if (ask) askCoach(ask.dataset.ask);
+        const apply = e.target.closest('[data-apply]');
+        if (apply) applyProposal(Number(apply.dataset.apply));
+        const ignore = e.target.closest('[data-ignore]');
+        if (ignore) ignoreProposal(Number(ignore.dataset.ignore));
+        const go = e.target.closest('[data-goto]');
+        if (go) showTab(go.dataset.goto);
     });
+
+    $('#chat-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = $('#chat-input');
+        if (state.asking || !input.value.trim()) return;
+        askCoach(input.value);
+        input.value = '';
+    });
+    $('#chat-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            $('#chat-form').requestSubmit();
+        }
+    });
+    $('#ai-save').addEventListener('click', saveAiKey);
+    $('#ai-forget').addEventListener('click', forgetAiKey);
+    $('#ai-key').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveAiKey();
+    });
+    $('#chat-clear').addEventListener('click', clearChat);
 
     const form = $('#calc-form');
     form.addEventListener('submit', (e) => e.preventDefault());
@@ -912,6 +1221,7 @@ function boot() {
     }
     bindEvents();
     fillForm();
+    renderAiSetup();
     showTab(location.hash.slice(1) || 'hoje');
     loadInitialPlan();
     loadPlan();

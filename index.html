@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Treinador Maratona</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="assets/app.css?v=3">
+    <link rel="stylesheet" href="assets/app.css?v=4">
 </head>
 <body>
 <header class="topbar">
@@ -17,6 +17,7 @@
         <span class="busy" id="busy">Calculando…</span>
         <nav class="tabs" id="tabs">
             <button data-tab="hoje" class="active">Hoje</button>
+            <button data-tab="treinador">Treinador IA</button>
             <button data-tab="semanas">Semanas</button>
             <button data-tab="calculadora">Calculadora</button>
             <button data-tab="mapa">Mapa</button>
@@ -36,6 +37,61 @@
                 <div class="card" id="today-card"></div>
                 <div class="card" id="week-card"></div>
             </div>
+        </div>
+    </section>
+
+    <section class="tab" id="tab-treinador">
+        <div class="coach-layout">
+            <div class="card coach-chat">
+                <div class="chat" id="chat" aria-live="polite"></div>
+                <div class="chips coach-quick" id="coach-quick">
+                    <button type="button" class="chip" data-ask="Quero montar meu plano. Me faça as perguntas que precisar.">Montar meu plano</button>
+                    <button type="button" class="chip" data-ask="Explique o treino de hoje: o objetivo, como executar e o que observar.">Explicar o treino de hoje</button>
+                    <button type="button" class="chip" data-ask="Perdi treinos nesta semana. Como sigo o plano sem me machucar?">Perdi treinos</button>
+                    <button type="button" class="chip" data-ask="Monte a minha estratégia para o dia da prova: largada, hidratação, géis e o que fazer se o pace cair.">Estratégia de prova</button>
+                </div>
+                <form class="chat-form" id="chat-form" autocomplete="off">
+                    <textarea id="chat-input" rows="2" maxlength="2000" placeholder="Ex.: vou correr a meia de Recife em 3 de maio, meu maior longão recente foi 10 km e fiz 10 km em 58 min"></textarea>
+                    <button class="btn primary" id="chat-send" type="submit">Enviar</button>
+                </form>
+            </div>
+            <aside class="stack">
+                <div class="card">
+                    <h2>Chave da IA (grátis)</h2>
+                    <p class="small muted" style="margin-top:0" id="ai-status"></p>
+                    <ol class="small">
+                        <li>Entre em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> com uma conta Google.</li>
+                        <li>Clique em <b>Create API key</b> e copie a chave.</li>
+                        <li>Cole abaixo e salve.</li>
+                    </ol>
+                    <div class="field">
+                        <label for="ai-key">Chave Gemini</label>
+                        <input id="ai-key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…">
+                    </div>
+                    <div class="actions">
+                        <button class="btn primary" id="ai-save" type="button">Salvar chave</button>
+                        <button class="btn" id="ai-forget" type="button">Apagar chave</button>
+                    </div>
+                    <details class="help">
+                        <summary>Avançado</summary>
+                        <div class="field" style="margin-top:8px">
+                            <label for="ai-model">Modelo Gemini</label>
+                            <input id="ai-model" spellcheck="false">
+                            <div class="hint"><code>gemini-flash-latest</code> segue sempre o Flash atual do plano grátis.</div>
+                        </div>
+                    </details>
+                    <p class="small muted" style="margin-bottom:0">A chave fica só neste navegador. A conversa e o resumo do plano vão para o Google; no plano grátis o Google pode usá-los para melhorar os produtos dele.</p>
+                </div>
+                <div class="card">
+                    <h2>Como o treinador trabalha</h2>
+                    <ul class="small">
+                        <li>A IA conversa, entende o seu momento e propõe a meta: distância, data, pace ou tempo, longão atual e relógio.</li>
+                        <li>Você confere e clica em <b>Aplicar ao plano</b>. Pace, parciais, semanas e arquivos <code>.fit</code> são calculados pelo motor do app, não pela IA.</li>
+                        <li>Depois, baixe os treinos em <b>Semanas</b> e monte o percurso no <b>Mapa</b>.</li>
+                    </ul>
+                    <div class="actions"><button class="btn" id="chat-clear" type="button">Nova conversa</button></div>
+                </div>
+            </aside>
         </div>
     </section>
 
@@ -188,6 +244,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.29.3/full/pyodide.js"></script>
-<script src="assets/app.js?v=4"></script>
+<script src="assets/app.js?v=5"></script>
 </body>
 </html>

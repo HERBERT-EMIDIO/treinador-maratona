@@ -407,6 +407,7 @@ A página é estática: não precisa de PHP nem de Python instalado. Ela baixa o
 | Aba | Para quê |
 | --- | --- |
 | Hoje | Contagem para a prova, treino do dia, próximo treino e km da semana |
+| Treinador IA | Conversa com o Gemini usando a chave grátis da própria pessoa (aistudio.google.com/apikey, guardada só no navegador). A IA pergunta, explica e propõe a meta; o botão "Aplicar ao plano" passa a proposta ao planejador, que recalcula plano, parciais e `.fit` |
 | Semanas | Até 16 semanas com a fase de cada uma (construção, recuperação, pico, polimento, prova), dia a dia, etapas, força, "Marcar como feito", download do `.fit` do dia e da semana inteira em `.zip`, sempre com a meta atual |
 | Calculadora | Relógio, distância, pace ou tempo alvo, faixa e parciais; nome, cidade e data da prova, início do plano e maior longão recente; recalcula ao digitar |
 | Mapa | Monta percurso clicando no mapa (segue ruas a pé), mostra km, tempo no pace e na faixa, fecha volta ou ida e volta, salva no navegador e baixa GPX |
