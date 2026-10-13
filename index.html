@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Treinador Maratona</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="assets/app.css?v=5">
+    <link rel="stylesheet" href="assets/app.css?v=6">
 </head>
 <body>
 <header class="topbar">
@@ -17,6 +17,7 @@
         <span class="busy" id="busy">Calculando…</span>
         <nav class="tabs" id="tabs">
             <button data-tab="hoje" class="active">Hoje</button>
+            <button data-tab="montar">Montar treino</button>
             <button data-tab="treinador">Treinador IA</button>
             <button data-tab="semanas">Semanas</button>
             <button data-tab="calculadora">Calculadora</button>
@@ -37,6 +38,129 @@
                 <div class="card" id="today-card"></div>
                 <div class="card" id="week-card"></div>
             </div>
+        </div>
+    </section>
+
+    <section class="tab" id="tab-montar">
+        <div class="builder-layout">
+            <div class="stack">
+                <div class="card step">
+                    <div class="step-head"><span class="step-num">1</span><div><h2>Seu relógio</h2><p class="small muted" id="b-watch-info">Escolha o modelo. O arquivo e o passo a passo seguem os menus dele.</p></div></div>
+                    <div class="choice-grid watches" id="b-watches"></div>
+                    <div class="field" style="margin-top:10px">
+                        <input id="b-model-other" list="model-list" placeholder="Outro modelo Garmin (ex.: Forerunner 745) e Enter">
+                    </div>
+                </div>
+
+                <div class="card step">
+                    <div class="step-head"><span class="step-num">2</span><div><h2>Treino de hoje</h2><p class="small muted">Tipo, distância e pace. O resumo ao lado atualiza na hora.</p></div></div>
+                    <div class="choice-grid types" id="b-types"></div>
+                    <div class="row">
+                        <div class="field">
+                            <label for="b-day">Dia do treino</label>
+                            <input id="b-day" type="date" data-b="day">
+                        </div>
+                        <div class="field" id="b-km-field">
+                            <label for="b-km">Distância (km)</label>
+                            <div class="stepper">
+                                <button type="button" data-step="km" data-delta="-0.5" aria-label="Menos meio km">−</button>
+                                <input id="b-km" inputmode="decimal" data-b="km">
+                                <button type="button" data-step="km" data-delta="0.5" aria-label="Mais meio km">+</button>
+                            </div>
+                            <div class="chips mini">
+                                <button type="button" class="chip" data-set="km" data-value="5">5</button>
+                                <button type="button" class="chip" data-set="km" data-value="8">8</button>
+                                <button type="button" class="chip" data-set="km" data-value="10">10</button>
+                                <button type="button" class="chip" data-set="km" data-value="12">12</button>
+                                <button type="button" class="chip" data-set="km" data-value="16">16</button>
+                                <button type="button" class="chip" data-set="km" data-value="21.1">21,1</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row three" id="b-tiros-fields">
+                        <div class="field">
+                            <label for="b-reps">Tiros</label>
+                            <div class="stepper">
+                                <button type="button" data-step="reps" data-delta="-1" aria-label="Menos um tiro">−</button>
+                                <input id="b-reps" inputmode="numeric" data-b="reps">
+                                <button type="button" data-step="reps" data-delta="1" aria-label="Mais um tiro">+</button>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="b-repm">Metros por tiro</label>
+                            <select id="b-repm" data-b="repM">
+                                <option value="200">200 m</option><option value="400">400 m</option><option value="600">600 m</option>
+                                <option value="800">800 m</option><option value="1000">1 km</option><option value="1200">1,2 km</option>
+                                <option value="1600">1,6 km</option><option value="2000">2 km</option><option value="3000">3 km</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="b-recovery">Trote entre tiros</label>
+                            <select id="b-recovery" data-b="recovery">
+                                <option value="0">Sem</option><option value="30">30 s</option><option value="45">45 s</option>
+                                <option value="60">1 min</option><option value="90">1 min 30 s</option><option value="120">2 min</option>
+                                <option value="180">3 min</option><option value="240">4 min</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="field">
+                            <label for="b-pace" id="b-pace-label">Pace alvo (min/km)</label>
+                            <div class="stepper">
+                                <button type="button" data-step="pace" data-delta="-5" aria-label="5 segundos mais rápido">−5 s</button>
+                                <input id="b-pace" placeholder="06:40" data-b="pace">
+                                <button type="button" data-step="pace" data-delta="5" aria-label="5 segundos mais lento">+5 s</button>
+                            </div>
+                            <div class="chips mini" id="b-pace-chips"></div>
+                        </div>
+                        <div class="field">
+                            <label for="b-tol">Faixa de pace: ± <span id="b-tol-out"></span> s</label>
+                            <input id="b-tol" type="range" min="3" max="30" step="1" data-b="tolerance">
+                            <div class="hint">Fora da faixa, o relógio vibra e avisa.</div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="field">
+                            <label for="b-warmup">Aquecimento</label>
+                            <select id="b-warmup" data-b="warmup">
+                                <option value="0">Sem</option><option value="5">5 min</option><option value="10">10 min</option>
+                                <option value="15">15 min</option><option value="20">20 min</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="b-cooldown">Desaquecimento</label>
+                            <select id="b-cooldown" data-b="cooldown">
+                                <option value="0">Sem</option><option value="5">5 min</option><option value="10">10 min</option>
+                                <option value="15">15 min</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="field" id="b-finish-field">
+                        <label for="b-finish">Km finais no pace (dentro do longão)</label>
+                        <div class="stepper">
+                            <button type="button" data-step="finishKm" data-delta="-1" aria-label="Menos um km">−</button>
+                            <input id="b-finish" inputmode="decimal" data-b="finishKm">
+                            <button type="button" data-step="finishKm" data-delta="1" aria-label="Mais um km">+</button>
+                        </div>
+                    </div>
+                    <div class="error" id="b-error"></div>
+                </div>
+
+                <div class="card step">
+                    <div class="step-head"><span class="step-num">3</span><div><h2>Percurso no mapa <span class="pill rest">opcional</span></h2><p class="small muted">Desenhe onde vai correr. A distância do mapa pode virar a do treino.</p></div></div>
+                    <div id="b-route"></div>
+                    <div class="actions">
+                        <button class="btn" id="b-draw" type="button">Desenhar no mapa</button>
+                        <button class="btn" id="b-use-route" type="button">Usar distância do mapa</button>
+                    </div>
+                </div>
+
+                <div class="card step">
+                    <div class="step-head"><span class="step-num">4</span><div><h2>Levar para o relógio</h2><p class="small muted" id="b-howto-sub"></p></div></div>
+                    <div id="b-howto"></div>
+                </div>
+            </div>
+            <aside class="card builder-summary" id="b-summary"><p class="muted">Preparando o motor de cálculo…</p></aside>
         </div>
     </section>
 
@@ -226,6 +350,7 @@
                 <div class="actions">
                     <button class="btn primary" id="map-gpx" type="button">Baixar GPX</button>
                     <button class="btn" id="map-save" type="button">Salvar aqui</button>
+                    <button class="btn" id="map-use" type="button">Usar no treino</button>
                 </div>
                 <details class="help">
                     <summary>Como levar para o relógio</summary>
@@ -259,6 +384,6 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.29.3/full/pyodide.js"></script>
-<script src="assets/app.js?v=6"></script>
+<script src="assets/app.js?v=7"></script>
 </body>
 </html>

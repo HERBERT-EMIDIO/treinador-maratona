@@ -1,7 +1,7 @@
 {
   "meta": {
     "planner_version": "1.2.0",
-    "generated_at": "2026-10-11T17:27:36-03:00",
+    "generated_at": "2026-10-13T08:33:50-03:00",
     "manual": "PLANO_MARATONA_GARMIN.md"
   },
   "event": {
@@ -167,11 +167,48 @@
     "Vivoactive 5",
     "Vivoactive 6"
   ],
+  "workout_types": [
+    {
+      "key": "pace",
+      "title": "Corrida no pace",
+      "description": "A distância inteira na faixa de pace. O relógio vibra quando você sai da faixa.",
+      "warmup": 0,
+      "cooldown": 0
+    },
+    {
+      "key": "leve",
+      "title": "Rodagem leve",
+      "description": "Corrida confortável com alerta de frequência cardíaca na zona 2. O pace só estima o tempo.",
+      "warmup": 0,
+      "cooldown": 0
+    },
+    {
+      "key": "ritmo",
+      "title": "Ritmo",
+      "description": "Aquecimento, bloco contínuo no pace e desaquecimento.",
+      "warmup": 15,
+      "cooldown": 10
+    },
+    {
+      "key": "tiros",
+      "title": "Intervalado",
+      "description": "Aquecimento, tiros no pace com trote de recuperação entre eles e desaquecimento. O relógio conta as repetições.",
+      "warmup": 15,
+      "cooldown": 10
+    },
+    {
+      "key": "longao",
+      "title": "Longão",
+      "description": "Longão em zona 2, com os quilômetros finais no pace se quiser.",
+      "warmup": 0,
+      "cooldown": 5
+    }
+  ],
   "training": {
     "root": "Treinos",
     "files_ready": true,
     "profile": "Maratona",
-    "plan_start": "2026-10-11",
+    "plan_start": "2026-10-13",
     "current_long_km": null,
     "peak_long_km": 32,
     "weeks": [

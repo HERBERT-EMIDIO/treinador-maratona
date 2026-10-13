@@ -123,6 +123,9 @@ class AppConfig:
     json_only: bool = False
     current_long_km: object = ""
     plan_start: str = ""
+    workout_kind: str | None = None
+    workout: dict[str, object] | None = None
+    workout_output: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -741,6 +744,7 @@ FIT_CRC_TABLE = (
 )
 FIT_ENUM, FIT_STRING, FIT_UINT16, FIT_UINT32, FIT_UINT32Z = 0x00, 0x07, 0x84, 0x86, 0x8C
 FIT_PACK = {FIT_ENUM: "<B", FIT_UINT16: "<H", FIT_UINT32: "<I", FIT_UINT32Z: "<I"}
+FIT_INVALID_ENUM = 0xFF
 FIT_INVALID_UINT16 = 0xFFFF
 FIT_INVALID_UINT32 = 0xFFFFFFFF
 FIT_NAME_SIZE = 16
@@ -756,6 +760,7 @@ FIT_SUB_SPORT_GENERIC = 0
 FIT_SUB_SPORT_STRENGTH = 20
 FIT_DURATION_TIME = 0
 FIT_DURATION_DISTANCE = 1
+FIT_DURATION_REPEAT_STEPS = 6
 FIT_DURATION_REPS = 29
 FIT_TARGET_SPEED = 0
 FIT_TARGET_HEART_RATE = 1
@@ -764,6 +769,7 @@ FIT_INTENSITY_ACTIVE = 0
 FIT_INTENSITY_REST = 1
 FIT_INTENSITY_WARMUP = 2
 FIT_INTENSITY_COOLDOWN = 3
+FIT_INTENSITY_RECOVERY = 4
 
 FIT_FILE_ID_FIELDS = ((0, 1, FIT_ENUM), (1, 2, FIT_UINT16), (2, 2, FIT_UINT16), (3, 4, FIT_UINT32Z), (4, 4, FIT_UINT32))
 FIT_WORKOUT_FIELDS = ((4, 1, FIT_ENUM), (11, 1, FIT_ENUM), (6, 2, FIT_UINT16), (8, FIT_NAME_SIZE, FIT_STRING))
@@ -1110,6 +1116,32 @@ def encode_fit_workout(name: str, sport: int, sub_sport: int, steps: list[FitSte
     return writer.to_bytes()
 
 
+def segment_steps(segments: tuple[RunSegment, ...], zone: PaceZone) -> list[FitStep]:
+    steps: list[FitStep] = []
+    for segment in segments:
+        if segment.unit == "min":
+            duration_type = FIT_DURATION_TIME
+            duration = int(segment.amount * 60_000)
+        elif segment.unit == "s":
+            duration_type = FIT_DURATION_TIME
+            duration = int(segment.amount * 1000)
+        else:
+            duration_type = FIT_DURATION_DISTANCE
+            duration = int((segment.amount * 100_000).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        if segment.target == "pace":
+            steps.append(FitStep(
+                segment.label, duration_type, duration, FIT_TARGET_SPEED, 0,
+                speed_mm_per_s(zone.slower_seconds), speed_mm_per_s(zone.faster_seconds),
+                segment.intensity,
+            ))
+        elif segment.target == "z2":
+            steps.append(FitStep(segment.label, duration_type, duration, FIT_TARGET_HEART_RATE, 2,
+                                 intensity=segment.intensity))
+        else:
+            steps.append(FitStep(segment.label, duration_type, duration, intensity=segment.intensity))
+    return steps
+
+
 def strength_steps(session: StrengthSession) -> list[FitStep]:
     steps: list[FitStep] = []
     for index, item in enumerate(session.exercises):
@@ -1279,6 +1311,11 @@ class MarathonPlan:
                 for item in self.splits
             ],
             "models": known_models(),
+            "workout_types": [
+                {"key": key, "title": item.title, "description": item.description,
+                 "warmup": item.warmup, "cooldown": item.cooldown}
+                for key, item in WORKOUT_TYPES.items()
+            ],
             "training": {
                 "root": DEFAULT_TRAININGS_DIR.name,
                 "files_ready": self.training_files_ready(),
@@ -1368,26 +1405,7 @@ class MarathonPlan:
         return f"Ritmo {self.zone.target_pace} {block}"[: FIT_NAME_SIZE - 1]
 
     def run_steps(self, session: RunSession) -> list[FitStep]:
-        steps: list[FitStep] = []
-        for segment in session.segments:
-            if segment.unit == "min":
-                duration_type = FIT_DURATION_TIME
-                duration = int(segment.amount * 60_000)
-            else:
-                duration_type = FIT_DURATION_DISTANCE
-                duration = int((segment.amount * 100_000).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-            if segment.target == "pace":
-                steps.append(FitStep(
-                    segment.label, duration_type, duration, FIT_TARGET_SPEED, 0,
-                    speed_mm_per_s(self.zone.slower_seconds), speed_mm_per_s(self.zone.faster_seconds),
-                    segment.intensity,
-                ))
-            elif segment.target == "z2":
-                steps.append(FitStep(segment.label, duration_type, duration, FIT_TARGET_HEART_RATE, 2,
-                                     intensity=segment.intensity))
-            else:
-                steps.append(FitStep(segment.label, duration_type, duration, intensity=segment.intensity))
-        return steps
+        return segment_steps(session.segments, self.zone)
 
     def describe_run(self, session: RunSession) -> str:
         parts = []
@@ -1621,6 +1639,266 @@ class MarathonPlan:
         )
 
 
+DEFAULT_CUSTOM_DIR = DEFAULT_TRAININGS_DIR / "avulsos"
+CUSTOM_MAX_KM = Decimal("100")
+
+
+@dataclass(frozen=True)
+class WorkoutType:
+    title: str
+    short: str
+    description: str
+    warmup: int
+    cooldown: int
+
+
+WORKOUT_TYPES = {
+    "pace": WorkoutType("Corrida no pace", "Pace",
+                        "A distância inteira na faixa de pace. O relógio vibra quando você sai da faixa.", 0, 0),
+    "leve": WorkoutType("Rodagem leve", "Leve",
+                        "Corrida confortável com alerta de frequência cardíaca na zona 2. O pace só estima o tempo.", 0, 0),
+    "ritmo": WorkoutType("Ritmo", "Ritmo",
+                         "Aquecimento, bloco contínuo no pace e desaquecimento.", 15, 10),
+    "tiros": WorkoutType("Intervalado", "Tiro",
+                         "Aquecimento, tiros no pace com trote de recuperação entre eles e desaquecimento. "
+                         "O relógio conta as repetições.", 15, 10),
+    "longao": WorkoutType("Longão", "Longao",
+                          "Longão em zona 2, com os quilômetros finais no pace se quiser.", 0, 5),
+}
+
+
+@dataclass(frozen=True)
+class WorkoutBlock:
+    repeat: int
+    segments: tuple[RunSegment, ...]
+
+
+def parse_count(value: object, label: str, low: int, high: int) -> int:
+    try:
+        number = int(str(value).strip())
+    except ValueError as exc:
+        raise ValueError(f"{label} precisa ser um número inteiro.") from exc
+    if not low <= number <= high:
+        raise ValueError(f"{label} precisa ficar entre {low} e {high}.")
+    return number
+
+
+def km_tag(distance: Decimal) -> str:
+    return format_km(distance).replace(" km", "k")
+
+
+class CustomWorkout:
+    def __init__(self, kind: str, watch: ResolvedWatch, zone: PaceZone, day: date, distance_km: Decimal,
+                 warmup_min: int, cooldown_min: int, reps: int, rep_m: int, recovery_s: int,
+                 finish_km: Decimal) -> None:
+        self.kind = kind
+        self.type = WORKOUT_TYPES[kind]
+        self.watch = watch
+        self.zone = zone
+        self.day = day
+        self.distance_km = distance_km
+        self.warmup_min = warmup_min
+        self.cooldown_min = cooldown_min
+        self.reps = reps
+        self.rep_m = rep_m
+        self.recovery_s = recovery_s
+        self.finish_km = finish_km
+
+    @classmethod
+    def build(cls, config: AppConfig) -> CustomWorkout:
+        kind = str(config.workout_kind)
+        if kind not in WORKOUT_TYPES:
+            raise ValueError(f"Tipo de treino desconhecido: {kind}. Use {', '.join(WORKOUT_TYPES)}.")
+        if config.finish_time:
+            raise ValueError("No treino avulso, informe o alvo com --pace.")
+        info = WORKOUT_TYPES[kind]
+        raw = config.workout or {}
+
+        def value(key: str, default: object) -> object:
+            item = raw.get(key)
+            return default if item is None or str(item).strip() == "" else item
+
+        pace = parse_pace(config.pace)
+        tolerance = parse_tolerance(config.tolerance_seconds, pace)
+        distance = parse_distance(value("km", "8"), "A distância do treino")
+        if distance > CUSTOM_MAX_KM:
+            raise ValueError(f"A distância do treino vai até {format_km(CUSTOM_MAX_KM)}.")
+        finish_text = str(value("finish_km", "0")).strip().replace(",", ".")
+        try:
+            finish = Decimal(finish_text).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+        except InvalidOperation as exc:
+            raise ValueError("O final no pace precisa ser um número de km.") from exc
+        if kind == "longao" and not Decimal("0") <= finish < distance:
+            raise ValueError("O final no pace precisa ser zero ou menor que a distância do longão.")
+        return cls(
+            kind=kind,
+            watch=resolve_watch(config.model),
+            zone=PaceZone(tolerance, pace - tolerance, pace, pace + tolerance),
+            day=parse_race_date(value("day", date.today().isoformat())),
+            distance_km=distance,
+            warmup_min=parse_count(value("warmup", info.warmup), "O aquecimento (min)", 0, 60),
+            cooldown_min=parse_count(value("cooldown", info.cooldown), "O desaquecimento (min)", 0, 60),
+            reps=parse_count(value("reps", 6), "O número de tiros", 1, 40),
+            rep_m=parse_count(value("rep_m", 400), "A distância do tiro (m)", 50, 5000),
+            recovery_s=parse_count(value("recovery_s", 90), "A recuperação (s)", 0, 900),
+            finish_km=finish if kind == "longao" else Decimal("0"),
+        )
+
+    def blocks(self) -> list[WorkoutBlock]:
+        blocks: list[WorkoutBlock] = []
+        if self.warmup_min:
+            blocks.append(WorkoutBlock(1, (warmup(self.warmup_min),)))
+        if self.kind == "tiros":
+            shot = pace_block(Decimal(self.rep_m) / 1000, f"Tiro {self.rep_m} m")
+            rest = (RunSegment("Recuperacao", "s", Decimal(self.recovery_s), "livre", FIT_INTENSITY_RECOVERY),)
+            blocks.append(WorkoutBlock(self.reps, (shot, *(rest if self.recovery_s else ()))))
+        elif self.kind == "leve":
+            blocks.append(WorkoutBlock(1, (easy(self.distance_km),)))
+        elif self.kind == "longao":
+            finish = (pace_block(self.finish_km, "Final no pace"),) if self.finish_km else ()
+            blocks.append(WorkoutBlock(1, (easy(self.distance_km - self.finish_km, "Longao Z2"), *finish)))
+        else:
+            label = "Bloco no pace" if self.kind == "ritmo" else "No pace"
+            blocks.append(WorkoutBlock(1, (pace_block(self.distance_km, label),)))
+        if self.cooldown_min:
+            blocks.append(WorkoutBlock(1, (cooldown(self.cooldown_min),)))
+        return blocks
+
+    def title(self) -> str:
+        if self.kind == "tiros":
+            return f"Tiro{self.reps}x{self.rep_m}"
+        return f"{self.type.short}{km_tag(self.distance_km)}"
+
+    def name(self) -> str:
+        return workout_label(self.day, self.title())
+
+    def file_name(self) -> str:
+        if self.kind == "tiros":
+            slug = f"tiros-{self.reps}x{self.rep_m}m"
+        else:
+            slug = f"{self.kind}-{km_tag(self.distance_km).replace(',', '-').replace('k', 'km')}"
+        return f"{self.day.isoformat()}_{slug}.fit"
+
+    def segment_seconds(self, segment: RunSegment) -> int:
+        if segment.unit == "min":
+            return int(segment.amount * 60)
+        if segment.unit == "s":
+            return int(segment.amount)
+        return elapsed_seconds(segment.amount, self.zone.target_seconds)
+
+    def measured_km(self) -> Decimal:
+        return sum((s.amount * b.repeat for b in self.blocks() for s in b.segments if s.unit == "km"), Decimal("0"))
+
+    def estimated_seconds(self) -> int:
+        return sum(self.segment_seconds(s) * b.repeat for b in self.blocks() for s in b.segments)
+
+    def fit_steps(self) -> list[FitStep]:
+        steps: list[FitStep] = []
+        for block in self.blocks():
+            first = len(steps)
+            steps.extend(segment_steps(block.segments, self.zone))
+            if block.repeat > 1:
+                steps.append(FitStep("Repetir", FIT_DURATION_REPEAT_STEPS, first, FIT_INVALID_ENUM,
+                                     block.repeat, intensity=FIT_INVALID_ENUM))
+        return steps
+
+    def segment_text(self, segment: RunSegment) -> tuple[str, str]:
+        if segment.unit == "min":
+            duration = f"{segment.amount} min"
+        elif segment.unit == "s":
+            duration = f"{segment.amount} s"
+        elif segment.amount < 1:
+            duration = f"{int(segment.amount * 1000)} m"
+        else:
+            duration = format_km(segment.amount)
+        target = {
+            "pace": f"{self.zone.faster_pace}–{self.zone.slower_pace} /km",
+            "z2": "FC zona 2",
+        }.get(segment.target, "livre")
+        return duration, target
+
+    def describe(self) -> str:
+        parts = []
+        for block in self.blocks():
+            texts = []
+            for segment in block.segments:
+                duration, target = self.segment_text(segment)
+                label = segment.label.replace("Recuperacao", "trote").replace("Longao Z2", "leve").lower()
+                texts.append(f"{duration} {label}" if target == "livre" else f"{duration} em {target}")
+            text = " + ".join(texts)
+            parts.append(f"{block.repeat} × ({text})" if block.repeat > 1 else text)
+        return " + ".join(parts)
+
+    def to_dict(self) -> dict[str, object]:
+        zone = self.zone
+        intensity = {FIT_INTENSITY_WARMUP: "warmup", FIT_INTENSITY_COOLDOWN: "cooldown",
+                     FIT_INTENSITY_RECOVERY: "recovery"}
+        return {
+            "meta": {"planner_version": PLANNER_VERSION, "manual": "PLANO_MARATONA_GARMIN.md"},
+            "workout": {
+                "kind": self.kind,
+                "type": self.type.title,
+                "name": self.name(),
+                "day": self.day.isoformat(),
+                "description": self.describe(),
+                "file": f"{DEFAULT_CUSTOM_DIR.name}/{self.file_name()}",
+                "pace": zone.target_pace,
+                "pace_seconds_per_km": zone.target_seconds,
+                "faster_pace": zone.faster_pace,
+                "slower_pace": zone.slower_pace,
+                "tolerance_seconds": zone.tolerance_seconds,
+                "distance_km": json_number(self.measured_km()),
+                "estimated_seconds": self.estimated_seconds(),
+                "estimated_time": format_duration(self.estimated_seconds()),
+                "fit_steps": len(self.fit_steps()),
+                "blocks": [
+                    {
+                        "repeat": block.repeat,
+                        "steps": [
+                            {
+                                "label": segment.label.replace("Recuperacao", "Recuperação (trote)"),
+                                "duration": self.segment_text(segment)[0],
+                                "target": segment.target,
+                                "target_text": self.segment_text(segment)[1],
+                                "intensity": intensity.get(segment.intensity, "active"),
+                                "seconds": self.segment_seconds(segment),
+                            }
+                            for segment in block.segments
+                        ],
+                    }
+                    for block in self.blocks()
+                ],
+            },
+            "watch": {
+                "model": self.watch.model,
+                "line": self.watch.line,
+                "exact_model": self.watch.exact_model,
+                "paths": {"run_workout": self.watch.run_workout_path, "course": self.watch.course_path},
+            },
+        }
+
+    def export(self, path: Path | None) -> Path:
+        destination = (path or DEFAULT_CUSTOM_DIR / self.file_name()).expanduser().resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        serial = int(datetime.now(timezone.utc).timestamp())
+        destination.write_bytes(encode_fit_workout(self.name(), FIT_SPORT_RUNNING, FIT_SUB_SPORT_GENERIC,
+                                                   self.fit_steps(), serial))
+        return destination
+
+    def render(self) -> str:
+        return "\n".join([
+            f"Treino avulso: {self.type.title} — {self.name()}",
+            f"Relógio: {self.watch.model} (linha {self.watch.line})",
+            f"Etapas: {self.describe()}",
+            f"Pace alvo {self.zone.target_pace}, faixa {self.zone.faster_pace} a {self.zone.slower_pace} min/km.",
+            f"Distância medida: {format_km(self.measured_km())}. "
+            f"Tempo estimado: {format_duration(self.estimated_seconds())}.",
+            "",
+            "Para levar ao relógio: cabo USB → GARMIN\\NewFiles → desconectar.",
+            f"No relógio: {self.watch.run_workout_path}.",
+        ])
+
+
 def read_config_file(path: Path) -> dict[str, object]:
     if not path.is_file():
         raise ValueError(f"Não encontrei o arquivo de configuração: {path}")
@@ -1665,7 +1943,9 @@ def build_parser() -> argparse.ArgumentParser:
             '  python garmin_marathon_planner.py --model "Venu 3" --pace 05:30 --distance 21.0975\n'
             "  python garmin_marathon_planner.py --config meu_alvo.json\n"
             "  python garmin_marathon_planner.py --fit --block-km 12\n"
-            "  python garmin_marathon_planner.py --treinos"
+            "  python garmin_marathon_planner.py --treinos\n"
+            "  python garmin_marathon_planner.py --avulso ritmo --km 8 --pace 06:20\n"
+            "  python garmin_marathon_planner.py --avulso tiros --tiros 6 --tiro-m 400 --recuperacao 90 --pace 05:30"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1709,6 +1989,22 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Imprime o plano em JSON e não grava treino_maratona_config.json. Usado pela página web.",
     )
+    custom = parser.add_argument_group(
+        "treino avulso",
+        "Gera um único treino de corrida .FIT. --pace e --tolerance viram o alvo do treino; --model escolhe o relógio.",
+    )
+    custom.add_argument("--avulso", dest="workout_kind", choices=list(WORKOUT_TYPES),
+                        help="Tipo do treino: " + ", ".join(f"{k} ({v.title})" for k, v in WORKOUT_TYPES.items()) + ".")
+    custom.add_argument("--km", help="Km do treino (pace, leve, ritmo e longao). Padrão: 8.")
+    custom.add_argument("--aquecimento", help="Minutos de aquecimento. Padrão do tipo.")
+    custom.add_argument("--desaquecimento", help="Minutos de desaquecimento. Padrão do tipo.")
+    custom.add_argument("--tiros", help="Repetições do intervalado. Padrão: 6.")
+    custom.add_argument("--tiro-m", dest="tiro_m", help="Metros de cada tiro. Padrão: 400.")
+    custom.add_argument("--recuperacao", help="Segundos de trote entre os tiros. Padrão: 90.")
+    custom.add_argument("--final-pace", dest="final_pace", help="Km finais no pace dentro do longão. Padrão: 0.")
+    custom.add_argument("--dia", help="Data do treino AAAA-MM-DD, que abre o nome no relógio. Padrão: hoje.")
+    custom.add_argument("--avulso-saida", dest="workout_output", type=Path,
+                        help="Arquivo .fit de saída. Padrão: Treinos/avulsos/<data>_<treino>.fit.")
     return parser
 
 
@@ -1750,6 +2046,12 @@ def load_config(argv: list[str] | None = None) -> AppConfig:
         json_only=args.json_only,
         current_long_km=data["current_long_km"],
         plan_start=str(data["plan_start"] or ""),
+        workout_kind=args.workout_kind,
+        workout={
+            "km": args.km, "warmup": args.aquecimento, "cooldown": args.desaquecimento, "reps": args.tiros,
+            "rep_m": args.tiro_m, "recovery_s": args.recuperacao, "finish_km": args.final_pace, "day": args.dia,
+        },
+        workout_output=args.workout_output,
     )
 
 
@@ -1757,6 +2059,15 @@ def main(argv: list[str] | None = None) -> int:
     configure_stdio()
     try:
         config = load_config(argv)
+        if config.workout_kind:
+            workout = CustomWorkout.build(config)
+            fit_path = workout.export(config.workout_output)
+            if config.json_only:
+                print(json.dumps(workout.to_dict(), ensure_ascii=False))
+            else:
+                print(workout.render())
+                print(f"\nTreino .FIT: {fit_path}")
+            return 0
         plan = MarathonPlan.build(config)
         fit_destination = None
         if config.fit_output is not None:

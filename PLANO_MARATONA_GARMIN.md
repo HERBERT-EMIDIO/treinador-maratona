@@ -407,6 +407,7 @@ A página é estática: não precisa de PHP nem de Python instalado. Ela baixa o
 | Aba | Para quê |
 | --- | --- |
 | Hoje | Contagem para a prova, treino do dia, próximo treino e km da semana |
+| Montar treino | Assistente de um treino avulso em quatro passos: relógio, treino de hoje (tipo, km, pace e faixa), percurso no mapa e download do `.fit` com o passo a passo do modelo escolhido. Detalhes em "Montar treino: do app ao relógio", abaixo |
 | Treinador IA | Conversa com o Gemini usando a chave grátis da própria pessoa (aistudio.google.com/apikey, guardada só no navegador). A IA pergunta, explica e propõe a meta; o botão "Aplicar ao plano" passa a proposta ao planejador, que recalcula plano, parciais e `.fit` |
 | Semanas | Até 16 semanas com a fase de cada uma (construção, recuperação, pico, polimento, prova), dia a dia, etapas, força, "Marcar como feito", download do `.fit` do dia e da semana inteira em `.zip`, sempre com a meta atual |
 | Calculadora | Relógio, distância, pace ou tempo alvo, faixa e parciais; nome, cidade e data da prova, início do plano e maior longão recente; recalcula ao digitar |
@@ -417,6 +418,54 @@ A página é estática: não precisa de PHP nem de Python instalado. Ela baixa o
 O GPX vai para o relógio como percurso: Garmin Connect, Treino e planejamento, Percursos, Importar, salvar e "Enviar para o dispositivo". No relógio, o percurso aparece em Corrida, Navegação, Percursos. Os treinos `.fit` continuam indo pelo cabo USB para `GARMIN\NewFiles`.
 
 Marcações de "feito", meta e percursos salvos ficam só no navegador de cada pessoa (localStorage). O mapa precisa de internet (OpenStreetMap e roteamento a pé).
+
+### Montar treino: do app ao relógio
+
+A aba **Montar treino** cria um treino de corrida fora do plano, para o dia que você quiser. O resumo ao lado mostra as etapas, a distância e o tempo estimado, calculados pelo script a cada mudança.
+
+1. **Relógio.** Escolha o modelo na grade ou digite outro e aperte Enter. O nome do treino, os menus do passo a passo e a escolha valem também para o resto do app.
+2. **Treino de hoje.** Escolha o tipo, o dia, a distância, o pace e a faixa (± segundos). Os botões − e + mudam meio km ou 5 s por toque. "Pace da prova" copia o pace da meta.
+3. **Percurso (opcional).** "Desenhar no mapa" abre o Mapa já com o treino como alvo: o painel mostra quanto falta e as parciais no pace do treino. "Usar no treino", no Mapa, ou "Usar distância do mapa", no assistente, copia a distância do percurso para o treino.
+4. **Levar para o relógio.** Baixe o `.fit` e siga o passo a passo da tela, que usa os menus do modelo escolhido.
+
+| Tipo | Etapas no relógio | Alerta |
+| --- | --- | --- |
+| Corrida no pace | Distância inteira na faixa | Pace |
+| Rodagem leve | Distância inteira na zona 2 | Frequência cardíaca. O pace informado só estima o tempo |
+| Ritmo | Aquecimento (15 min), bloco no pace, desaquecimento (10 min) | Pace no bloco |
+| Intervalado | Aquecimento, N × (tiro em metros no pace + trote por tempo), desaquecimento | Pace nos tiros. O relógio conta as repetições |
+| Longão | Zona 2 e, se quiser, os km finais no pace; 5 min de desaquecimento | FC no trecho leve, pace no final |
+
+Aquecimento e desaquecimento de cada tipo podem ser trocados (0 a 20 min). Etapas por tempo e por distância avançam sozinhas no relógio.
+
+**Do computador para o relógio**
+
+1. Ligue o relógio ao computador pelo cabo de carga.
+2. Windows: Explorador de Arquivos → nome do relógio → Armazenamento interno → `GARMIN` → `NewFiles`. Mac: o relógio costuma não aparecer no Finder; use um app de transferência MTP, como o OpenMTP (grátis).
+3. Copie o arquivo `.fit` solto (sem pasta e sem `.zip`) para `NewFiles` e desconecte o cabo.
+4. No relógio, abra a lista de treinos da atividade Corrida:
+
+| Linha | Caminho |
+| --- | --- |
+| Forerunner | START → Corrida → UP → Treino → Treinos → treino do dia |
+| Vívoactive | START → Atividades → Corrida → role para baixo → Treino → Biblioteca de treinos → treino → Fazer treino → START |
+| Venu | Botão de cima → Corrida → role para baixo → Treino → Biblioteca de treinos → treino → Fazer treino |
+| Fenix, Epix, Enduro | START → Corrida → segure MENU → Treino → Treinos → treino → Fazer treino |
+| Instinct | GPS (START) → Corrida → segure MENU → Treino → Treinos → treino → Fazer treino |
+
+O nome do treino começa pela data (`13out Ritmo8k`), porque o relógio mostra só os 15 primeiros caracteres. Pelo cabo, o treino fica só no relógio: a tela "Importar dados" do Garmin Connect e o app do celular não aceitam treinos. Apague os antigos na lista de treinos do relógio.
+
+O percurso do mapa vai separado, como GPX: Garmin Connect → Treinamento e planejamento → Percursos → Importar → "Enviar para o dispositivo".
+
+Pela linha de comando, o mesmo treino sai com `--avulso`:
+
+```text
+python garmin_marathon_planner.py --avulso ritmo --km 8 --pace 06:20
+python garmin_marathon_planner.py --avulso tiros --tiros 6 --tiro-m 400 --recuperacao 90 --pace 05:30 --model "Vivoactive 6"
+python garmin_marathon_planner.py --avulso longao --km 18 --final-pace 4 --pace 06:40
+```
+
+Os tipos são `pace`, `leve`, `ritmo`, `tiros` e `longao`. `--aquecimento` e `--desaquecimento` (minutos), `--dia` (AAAA-MM-DD) e `--avulso-saida` completam. O arquivo vai para `Treinos/avulsos/`.
 
 Publicar no GitHub Pages (grátis, repositório público), na pasta do projeto:
 

@@ -8,15 +8,21 @@ import contextlib, io, json, shutil, sys, zipfile
 sys.path.insert(0, ${JSON.stringify(APP_DIR)})
 import garmin_marathon_planner as gmp
 
-def plan_json(args_json):
-    shutil.rmtree(gmp.DEFAULT_TRAININGS_DIR, ignore_errors=True)
+def run_json(args, extra):
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = gmp.main(json.loads(args_json) + ["--json-only", "--treinos"])
+        code = gmp.main(json.loads(args) + extra)
     if code != 0:
         message = err.getvalue().strip().removeprefix("Erro:").strip()
         return json.dumps({"error": message or "O cálculo falhou."}, ensure_ascii=False)
     return out.getvalue()
+
+def plan_json(args_json):
+    shutil.rmtree(gmp.DEFAULT_TRAININGS_DIR, ignore_errors=True)
+    return run_json(args_json, ["--json-only", "--treinos"])
+
+def workout_json(args_json):
+    return run_json(args_json, ["--json-only"])
 
 def week_zip(folder):
     root = gmp.DEFAULT_TRAININGS_DIR
@@ -38,6 +44,10 @@ const DEFAULT_SETTINGS = {
     city: 'Recife',
     start: '',
     longao: '',
+};
+const WORKOUT_DEFAULTS = {
+    kind: 'ritmo', day: '', km: '8', pace: '', tolerance: '10',
+    warmup: '15', cooldown: '10', reps: '6', repM: '400', recovery: '90', finishKm: '0',
 };
 const RECIFE = [-8.0631, -34.8711];
 const AI_MODEL = 'gemini-flash-latest';
@@ -68,9 +78,12 @@ const state = {
     ai: { key: '', model: AI_MODEL, ...store.get('tm_ai', {}) },
     chat: store.get('tm_chat', []),
     asking: false,
+    builder: { ...WORKOUT_DEFAULTS, ...store.get('tm_workout', {}) },
+    workout: null,
+    workoutId: 0,
     requestId: 0,
     week: null,
-    manualLoaded: false,
+    manualTask: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -194,6 +207,7 @@ function startEngine() {
         return {
             fs: pyodide.FS,
             planJson: pyodide.globals.get('plan_json'),
+            workoutJson: pyodide.globals.get('workout_json'),
             weekZip: pyodide.globals.get('week_zip'),
             root: pyodide.runPython('gmp.DEFAULT_TRAININGS_DIR.as_posix()'),
         };
@@ -291,6 +305,7 @@ function showTab(name) {
     if (tab === 'mapa') initMap();
     if (tab === 'manual') loadManual();
     if (tab === 'treinador') renderChat();
+    if (tab === 'montar') renderBuilderRoute();
 }
 
 /* ---------- render ---------- */
@@ -302,6 +317,7 @@ function renderAll() {
     renderWeeks();
     renderCalcResults();
     renderWatch();
+    renderBuilderChoices();
     renderMapTargets();
     renderMapStats();
     if (mapState.map) renderStops();
@@ -518,6 +534,7 @@ function updateSetting(key, value) {
     store.set('tm_settings', state.settings);
     syncFormState();
     scheduleLoad();
+    if (key === 'model') scheduleWorkout();
 }
 
 function renderCalcResults() {
@@ -583,6 +600,254 @@ function renderWatch() {
         </div>`;
     const course = $('#course-path');
     if (course && w.paths) course.textContent = w.paths.course;
+}
+
+/* ---------- montar treino ---------- */
+
+const plainName = (text) => String(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+function saveBuilder() {
+    store.set('tm_workout', state.builder);
+}
+
+function workoutArgs() {
+    const b = state.builder;
+    const flags = {
+        model: state.settings.model, avulso: b.kind, pace: b.pace, tolerance: b.tolerance, dia: b.day,
+        aquecimento: b.warmup, desaquecimento: b.cooldown,
+    };
+    if (b.kind === 'tiros') Object.assign(flags, { tiros: b.reps, 'tiro-m': b.repM, recuperacao: b.recovery });
+    else flags.km = b.km;
+    if (b.kind === 'longao') flags['final-pace'] = b.finishKm;
+    return Object.entries(flags).map(([flag, value]) => `--${flag}=${value}`);
+}
+
+async function loadWorkout() {
+    const id = ++state.workoutId;
+    try {
+        const engine = await startEngine();
+        if (id !== state.workoutId) return null;
+        const data = JSON.parse(engine.workoutJson(JSON.stringify(workoutArgs())));
+        if (data.error) throw new Error(data.error);
+        state.workout = data;
+        $('#b-error').textContent = '';
+        $('#b-summary').classList.remove('stale');
+        renderBuilderSummary();
+        renderBuilderHowto();
+        renderBuilderRoute();
+        renderMapTargets();
+        renderMapStats();
+        return data;
+    } catch (error) {
+        if (id === state.workoutId) {
+            $('#b-error').textContent = error.message;
+            $('#b-summary').classList.add('stale');
+        }
+        return null;
+    }
+}
+
+let workoutTimer;
+function scheduleWorkout() {
+    clearTimeout(workoutTimer);
+    workoutTimer = setTimeout(loadWorkout, 250);
+}
+
+function fillBuilder() {
+    const b = state.builder;
+    $$('[data-b]').forEach((input) => { input.value = b[input.dataset.b]; });
+    $('#b-tol-out').textContent = b.tolerance;
+    syncBuilderFields();
+}
+
+function syncBuilderFields() {
+    const { kind } = state.builder;
+    $('#b-km-field').hidden = kind === 'tiros';
+    $('#b-tiros-fields').hidden = kind !== 'tiros';
+    $('#b-finish-field').hidden = kind !== 'longao';
+    $('#b-pace-label').textContent = {
+        leve: 'Pace estimado (só para calcular o tempo)',
+        tiros: 'Pace dos tiros (min/km)',
+        longao: 'Pace do final e da estimativa (min/km)',
+    }[kind] || 'Pace alvo (min/km)';
+    $$('#b-types .choice').forEach((c) => c.classList.toggle('active', c.dataset.kind === kind));
+}
+
+function renderBuilderChoices() {
+    const { watch, target } = state.plan;
+    const models = state.plan.models || [];
+    const list = models.some((m) => plainName(m) === plainName(watch.model)) ? models : [watch.model, ...models];
+    $('#b-watches').innerHTML = list.map((m) => `
+        <button type="button" class="choice ${plainName(m) === plainName(watch.model) ? 'active' : ''}" data-watch="${esc(m)}"><b>${esc(m)}</b></button>`).join('');
+    $('#b-watch-info').textContent = `${watch.model} · linha ${watch.line}${watch.exact_model ? '' : ' (perfil geral da linha)'}. ${watch.input_style}`;
+    $('#b-types').innerHTML = (state.plan.workout_types || []).map((t) => `
+        <button type="button" class="choice" data-kind="${esc(t.key)}"><b>${esc(t.title)}</b><small>${esc(t.description)}</small></button>`).join('');
+    $('#b-pace-chips').innerHTML = `<button type="button" class="chip" data-set="pace" data-value="${esc(target.pace)}">Pace da prova ${esc(target.pace)}</button>`;
+    syncBuilderFields();
+}
+
+function stepItem(step) {
+    const target = step.target_text !== 'livre' ? ` · ${step.target_text}` : '';
+    const time = step.target === 'pace' || step.intensity !== 'active' ? fmtDuration(step.seconds) : `≈ ${fmtDuration(step.seconds)}`;
+    return `<li class="${esc(step.target)} ${esc(step.intensity)}"><span><b>${esc(step.duration)}</b> · ${esc(step.label)}${esc(target)}</span><span class="seg-time">${esc(time)}</span></li>`;
+}
+
+function renderBuilderSummary() {
+    if (!state.workout) return;
+    const w = state.workout.workout;
+    const blocks = w.blocks.map((block) => {
+        const items = `<ul class="segments">${block.steps.map(stepItem).join('')}</ul>`;
+        return block.repeat > 1 ? `<div class="repeat"><b>Repetir ${block.repeat} ×</b>${items}</div>` : items;
+    }).join('');
+    const timed = w.blocks.some((b) => b.steps.some((s) => / (min|s)$/.test(s.duration)));
+    $('#b-summary').innerHTML = `
+        <div class="eyebrow">${esc(w.type)} · ${esc(fmtDate(w.day, { weekday: 'short', day: '2-digit', month: '2-digit' }))}</div>
+        <h2>${esc(w.name)}</h2>
+        <div class="map-stats">
+            <div class="stat"><div class="label">Distância</div><div class="value">${esc(fmtKm(w.distance_km))}</div></div>
+            <div class="stat"><div class="label">Tempo estimado</div><div class="value">${esc(fmtDuration(w.estimated_seconds))}</div></div>
+        </div>
+        <p class="small muted" style="margin:0 0 8px">Pace ${esc(w.pace)}/km, faixa ${esc(w.faster_pace)}–${esc(w.slower_pace)}. ${esc(w.fit_steps)} etapas no relógio.${timed ? ' A distância conta só as etapas em km; as etapas por tempo somam no tempo estimado.' : ''}</p>
+        ${blocks}
+        <div class="actions">
+            <button class="btn primary" type="button" data-download-workout>Baixar treino .fit</button>
+            <button class="btn" type="button" data-download-gpx ${routeCoords().length > 1 ? '' : 'disabled'}>Baixar percurso .gpx</button>
+        </div>
+        <p class="small muted" style="margin-bottom:0">Arquivo: <code>${esc(w.file.split('/').pop())}</code></p>`;
+}
+
+function renderBuilderHowto() {
+    if (!state.workout) return;
+    const { workout: w, watch } = state.workout;
+    const alert = {
+        leve: 'O alerta é de frequência cardíaca: acima da zona 2, o relógio vibra e avisa.',
+        longao: 'No trecho leve, o alerta é de frequência cardíaca na zona 2; no final, de pace.',
+    }[w.kind] || `Fora da faixa ${w.faster_pace}–${w.slower_pace}, o relógio vibra e avisa.`;
+    $('#b-howto-sub').textContent = `Passo a passo para o ${watch.model}. Leva uns 2 minutos.`;
+    $('#b-howto').innerHTML = `
+        <ol class="howto">
+            <li><b>Baixe o treino</b> no botão "Baixar treino .fit" do resumo. O arquivo é <code>${esc(w.file.split('/').pop())}</code>.</li>
+            <li><b>Ligue o ${esc(watch.model)} ao computador</b> com o cabo de carga.</li>
+            <li><b>Abra a pasta do relógio.</b> Windows: Explorador de Arquivos → <code>${esc(watch.model)}</code> → Armazenamento interno → <code>GARMIN</code> → <code>NewFiles</code>. Mac: se o relógio não aparecer no Finder, use o app gratuito OpenMTP.</li>
+            <li><b>Copie o arquivo para <code>NewFiles</code></b> e desconecte o cabo. O relógio coloca o treino na lista de treinos com o nome <b>${esc(w.name)}</b>.</li>
+            <li><b>No relógio, comece o treino:</b><br><span class="watch-path">${esc(watch.paths.run_workout)}</span></li>
+            <li><b>Durante a corrida</b>, a tela do treino mostra a etapa, o alvo e o que falta. ${esc(alert)} As etapas por tempo e por distância passam sozinhas.${w.kind === 'tiros' ? ' Nos tiros, o relógio mostra em qual repetição você está.' : ''}</li>
+        </ol>
+        <details class="help">
+            <summary>Também quero o percurso do mapa no relógio</summary>
+            <ol class="small">
+                <li>Desenhe o percurso no passo 3 e clique em "Baixar percurso .gpx".</li>
+                <li>No computador, em <a href="https://connect.garmin.com/modern/courses" target="_blank" rel="noopener">Garmin Connect → Treinamento e planejamento → Percursos</a>, clique em <b>Importar</b>, escolha o arquivo e salve como corrida.</li>
+                <li>Abra o percurso, clique em <b>Enviar para o dispositivo</b> e sincronize o relógio pelo app Garmin Connect.</li>
+                <li>No relógio: <span class="watch-path">${esc(watch.paths.course)}</span></li>
+            </ol>
+        </details>
+        <details class="help">
+            <summary>O treino não apareceu no relógio</summary>
+            <ul class="small">
+                <li>Copie o arquivo <code>.fit</code> solto, não a pasta nem um <code>.zip</code>.</li>
+                <li>Desconecte o cabo antes de procurar. Se ainda não aparecer, reinicie o relógio.</li>
+                <li>A tela "Importar dados" do Garmin Connect e o app do celular não aceitam treinos. O caminho é o cabo.</li>
+                <li>Treinos copiados pelo cabo ficam só no relógio. Apague os antigos na lista de treinos do relógio.</li>
+            </ul>
+        </details>
+        <div class="actions"><button class="btn" type="button" data-manual="Montar treino">Ver o passo a passo no manual</button></div>`;
+}
+
+function renderBuilderRoute() {
+    const box = $('#b-route');
+    if (!box) return;
+    const coords = routeCoords();
+    const gpx = $('[data-download-gpx]');
+    if (gpx) gpx.disabled = coords.length < 2;
+    $('#b-use-route').disabled = coords.length < 2 || state.builder.kind === 'tiros';
+    if (coords.length < 2) {
+        box.innerHTML = '<p class="small muted" style="margin:0">Nenhum percurso desenhado ainda.</p>';
+        return;
+    }
+    const km = routeMeters() / 1000;
+    const start = $('#route-start').value || 'início';
+    const end = $('#route-end').value || 'chegada';
+    const goal = state.builder.kind !== 'tiros' ? state.workout?.workout.distance_km : 0;
+    const diff = goal ? km - goal : 0;
+    let note = '';
+    if (goal) {
+        if (Math.abs(diff) < 0.2) note = 'Bate com a distância do treino.';
+        else if (diff < 0) note = `Faltam ${fmtKm(-diff)} para os ${fmtKm(goal)} do treino.`;
+        else note = `Passa ${fmtKm(diff)} dos ${fmtKm(goal)} do treino.`;
+    }
+    box.innerHTML = `<p style="margin:0"><b>${esc(fmtKm(km))}</b> · ${esc(start)} → ${esc(end)} · ${mapState.stops.length} ${mapState.stops.length === 1 ? 'parada' : 'paradas'}</p>
+        ${note ? `<p class="small muted" style="margin:4px 0 0">${esc(note)}</p>` : ''}`;
+}
+
+function setBuilder(key, value) {
+    state.builder[key] = String(value);
+    saveBuilder();
+    fillBuilder();
+    renderBuilderRoute();
+    scheduleWorkout();
+}
+
+function chooseKind(kind) {
+    const type = (state.plan?.workout_types || []).find((t) => t.key === kind);
+    Object.assign(state.builder, { kind }, type ? { warmup: String(type.warmup), cooldown: String(type.cooldown) } : {});
+    saveBuilder();
+    fillBuilder();
+    renderBuilderRoute();
+    scheduleWorkout();
+}
+
+function stepBuilder(key, delta) {
+    const b = state.builder;
+    if (key === 'pace') {
+        const [m, s] = String(b.pace).split(':').map(Number);
+        const current = Number.isFinite(m * 60 + s) ? m * 60 + s : paceSeconds(state.settings.pace);
+        const total = Math.min(3599, Math.max(60, current + delta));
+        setBuilder('pace', `${pad(Math.floor(total / 60))}:${pad(total % 60)}`);
+        return;
+    }
+    const number = Number(String(b[key]).replace(',', '.')) || 0;
+    const [low, high] = { km: [0.5, 100], reps: [1, 40], finishKm: [0, Math.max(0, Math.floor(Number(b.km) - 1))] }[key];
+    setBuilder(key, Math.min(high, Math.max(low, Math.round((number + delta) * 10) / 10)));
+}
+
+function chooseWatch(model) {
+    const name = String(model).trim();
+    if (!name) return;
+    $$('#b-watches .choice').forEach((c) => c.classList.toggle('active', plainName(c.dataset.watch) === plainName(name)));
+    $('#f-model').value = name;
+    updateSetting('model', name);
+}
+
+function useRouteInWorkout() {
+    const km = Math.round((routeMeters() / 1000) * 10) / 10;
+    if (km < 0.5) return toast('Desenhe o percurso no mapa primeiro.');
+    if (state.builder.kind === 'tiros') return toast('No intervalado, a distância vem dos tiros.');
+    setBuilder('km', km);
+    toast(`Treino ajustado para ${fmtKm(km, 1)}.`);
+}
+
+function drawOnMap() {
+    showTab('mapa');
+    const select = $('#map-target');
+    if ([...select.options].some((o) => o.value === 'workout')) select.value = 'workout';
+    renderMapStats();
+}
+
+async function downloadWorkout(button) {
+    button.disabled = true;
+    try {
+        const data = await loadWorkout();
+        if (!data) throw new Error($('#b-error').textContent || 'Confira os campos do treino.');
+        const engine = await startEngine();
+        const { file } = data.workout;
+        download(engine.fs.readFile(`${engine.root}/${file}`), file.split('/').pop(), 'application/octet-stream');
+        toast('Treino baixado. Copie para GARMIN\\NewFiles no relógio.');
+    } catch (error) {
+        toast(error.message);
+    } finally {
+        button.disabled = false;
+    }
 }
 
 /* ---------- treinador IA ---------- */
@@ -858,16 +1123,24 @@ function clearChat() {
 
 /* ---------- manual ---------- */
 
-async function loadManual() {
-    if (state.manualLoaded) return;
-    state.manualLoaded = true;
-    try {
-        const text = await (await fetch('PLANO_MARATONA_GARMIN.md', { cache: 'no-store' })).text();
-        $('#manual').innerHTML = window.marked ? window.marked.parse(text) : `<pre>${esc(text)}</pre>`;
-    } catch {
-        state.manualLoaded = false;
-        $('#manual').innerHTML = '<p class="muted">Não consegui abrir PLANO_MARATONA_GARMIN.md.</p>';
-    }
+function loadManual() {
+    state.manualTask ??= (async () => {
+        try {
+            const text = await (await fetch('PLANO_MARATONA_GARMIN.md', { cache: 'no-store' })).text();
+            $('#manual').innerHTML = window.marked ? window.marked.parse(text) : `<pre>${esc(text)}</pre>`;
+        } catch {
+            state.manualTask = null;
+            $('#manual').innerHTML = '<p class="muted">Não consegui abrir PLANO_MARATONA_GARMIN.md.</p>';
+        }
+    })();
+    return state.manualTask;
+}
+
+async function openManual(title) {
+    showTab('manual');
+    await loadManual();
+    const heading = $$('#manual h2, #manual h3, #manual h4').find((h) => h.textContent.startsWith(title));
+    heading?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ---------- mapa ---------- */
@@ -1173,7 +1446,7 @@ function drawMarks() {
 
 function renderStops() {
     const list = orderedStops();
-    const pace = state.plan?.target.pace_seconds_per_km;
+    const pace = state.plan ? mapPace().seconds : 0;
     $('#stop-count').textContent = list.length;
     $('#stop-list').innerHTML = list.length
         ? list.map((stop, i) => {
@@ -1212,6 +1485,7 @@ function redrawRoute() {
     $('#map-undo').disabled = !mapState.past.length;
     $('#map-redo').disabled = !mapState.future.length;
     renderMapStats();
+    renderBuilderRoute();
 }
 
 async function placeFromField(which) {
@@ -1239,6 +1513,10 @@ function renderMapTargets() {
     if (!select || !state.plan) return;
     const current = select.value;
     const options = ['<option value="">Livre (sem distância alvo)</option>'];
+    if (state.workout) {
+        const w = state.workout.workout;
+        options.push(`<option value="workout">Treino montado · ${esc(w.name)} · ${esc(fmtKm(w.distance_km))}</option>`);
+    }
     const from = currentWeek()?.number ?? 1;
     allDays().filter((d) => d.weekNumber >= from && d.weekNumber <= from + 1).forEach((d) => {
         if (d.run) options.push(`<option value="${d.run.distance_km}">${esc(d.run.name)} · ${esc(fmtKm(d.run.distance_km))}</option>`);
@@ -1248,13 +1526,25 @@ function renderMapTargets() {
     if ([...select.options].some((o) => o.value === current)) select.value = current;
 }
 
+function mapPace() {
+    const custom = $('#map-target')?.value === 'workout' ? state.workout?.workout : null;
+    if (custom) {
+        return {
+            seconds: custom.pace_seconds_per_km, text: custom.pace, target: custom.distance_km,
+            zone: { faster_pace: custom.faster_pace, slower_pace: custom.slower_pace },
+        };
+    }
+    return {
+        seconds: state.plan.target.pace_seconds_per_km, text: state.plan.target.pace,
+        target: Number($('#map-target')?.value || 0), zone: state.plan.pace_zone,
+    };
+}
+
 function renderMapStats() {
     const box = $('#map-stats');
     if (!box || !state.plan) return;
     const km = routeMeters() / 1000;
-    const pace = state.plan.target.pace_seconds_per_km;
-    const zone = state.plan.pace_zone;
-    const target = Number($('#map-target').value || 0);
+    const { seconds: pace, text: paceText, zone, target } = mapPace();
     let goal = '';
     if (target) {
         const diff = target - km;
@@ -1269,7 +1559,7 @@ function renderMapStats() {
     box.innerHTML = `
         <div class="map-stats">
             <div class="stat"><div class="label">Distância</div><div class="value">${esc(fmtKm(km))}</div></div>
-            <div class="stat"><div class="label">No pace ${esc(state.plan.target.pace)}</div><div class="value">${esc(fmtDuration(km * pace))}</div></div>
+            <div class="stat"><div class="label">No pace ${esc(paceText)}</div><div class="value">${esc(fmtDuration(km * pace))}</div></div>
         </div>
         <div class="small muted">Faixa: ${esc(fmtDuration(km * paceSeconds(zone.faster_pace)))} a ${esc(fmtDuration(km * paceSeconds(zone.slower_pace)))}</div>
         ${goal}
@@ -1451,6 +1741,19 @@ function bindEvents() {
         if (ignore) ignoreProposal(Number(ignore.dataset.ignore));
         const go = e.target.closest('[data-goto]');
         if (go) showTab(go.dataset.goto);
+        const watchChoice = e.target.closest('[data-watch]');
+        if (watchChoice) chooseWatch(watchChoice.dataset.watch);
+        const kind = e.target.closest('[data-kind]');
+        if (kind) chooseKind(kind.dataset.kind);
+        const step = e.target.closest('[data-step]');
+        if (step) stepBuilder(step.dataset.step, Number(step.dataset.delta));
+        const preset = e.target.closest('[data-set]');
+        if (preset) setBuilder(preset.dataset.set, preset.dataset.value);
+        const workoutFile = e.target.closest('[data-download-workout]');
+        if (workoutFile) downloadWorkout(workoutFile);
+        if (e.target.closest('[data-download-gpx]')) exportGpx();
+        const manualLink = e.target.closest('[data-manual]');
+        if (manualLink) openManual(manualLink.dataset.manual);
     });
 
     $('#chat-form').addEventListener('submit', (e) => {
@@ -1535,7 +1838,30 @@ function bindEvents() {
     $('#map-clear').addEventListener('click', clearRoute);
     $('#map-gpx').addEventListener('click', exportGpx);
     $('#map-save').addEventListener('click', saveRoute);
-    $('#map-target').addEventListener('change', renderMapStats);
+    $('#map-target').addEventListener('change', () => {
+        renderMapStats();
+        renderStops();
+    });
+    $('#map-use').addEventListener('click', () => {
+        useRouteInWorkout();
+        if (routeMeters() >= 500 && state.builder.kind !== 'tiros') showTab('montar');
+    });
+
+    $('#tab-montar').addEventListener('input', (e) => {
+        const key = e.target.dataset.b;
+        if (!key) return;
+        state.builder[key] = e.target.value;
+        if (key === 'tolerance') $('#b-tol-out').textContent = e.target.value;
+        saveBuilder();
+        scheduleWorkout();
+    });
+    $('#b-model-other').addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        chooseWatch(e.target.value);
+        e.target.value = '';
+    });
+    $('#b-draw').addEventListener('click', drawOnMap);
+    $('#b-use-route').addEventListener('click', useRouteInWorkout);
     $('#map-search').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') searchPlace(e.target.value);
     });
@@ -1546,12 +1872,18 @@ function boot() {
         state.settings.start = todayISO();
         store.set('tm_settings', state.settings);
     }
+    const builder = state.builder;
+    if (!builder.day || builder.day < todayISO()) builder.day = todayISO();
+    if (!builder.pace) builder.pace = state.settings.pace || DEFAULT_SETTINGS.pace;
+    saveBuilder();
     bindEvents();
     fillForm();
+    fillBuilder();
     renderAiSetup();
     showTab(location.hash.slice(1) || 'hoje');
     loadInitialPlan();
     loadPlan();
+    loadWorkout();
 }
 
 boot();
